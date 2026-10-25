@@ -9,7 +9,7 @@
     "run_worker_first": ["/api/*"]
   },
   "vars": {
-    "ALLOWED_LINE_GROUP_NAME": "test API"
+    "ALLOWED_LINE_GROUP_NAME": "Yiki-online"
   },
   "d1_databases": [
     {
