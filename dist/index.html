@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css?v=10" />
   <link rel="stylesheet" href="./enhancements.css?v=11" />
-  <link rel="stylesheet" href="./realtime-template.css?v=1" />
+  <link rel="stylesheet" href="./realtime-template.css?v=3" />
 </head>
 <body>
   <div class="shell">
@@ -22,7 +22,8 @@
         <div><strong>Yiki</strong><span>ANALYTICS</span></div>
       </div>
       <nav aria-label="เมนูหลัก">
-        <button class="nav-item active" data-page="dashboard" onclick="showPage('dashboard',this)"><span class="nav-icon">⌁</span><span>รับข้อความใหม่จาก LINE</span><i></i></button>
+        <button class="nav-item active" data-page="dashboard" onclick="showPage('dashboard',this)"><span class="nav-icon">⌁</span><span>ข้อมูลเรียลไทม์</span><i></i></button>
+        <button class="nav-item" data-page="analysis" onclick="showPage('analysis',this)"><span class="nav-icon">◎</span><span>สรุปผลวิเคราะห์</span><i></i></button>
         <button class="nav-item" data-page="three" onclick="showPage('three',this)"><span class="nav-icon">03</span><span>คำนวณชุด 3 หลัก</span><i></i></button>
         <button class="nav-item" data-page="four" onclick="showPage('four',this)"><span class="nav-icon">264</span><span>วิเคราะห์ 264 รอบ</span><i></i></button>
         <button class="nav-item" data-page="guide" onclick="showPage('guide',this)"><span class="nav-icon">?</span><span>คู่มือเทคนิค</span><i></i></button>
@@ -34,7 +35,7 @@
     <main>
       <header class="topbar">
         <button class="menu-toggle" id="menuToggle" aria-label="เปิดเมนู">☰</button>
-        <div><p class="eyebrow">ห้องวิเคราะห์ตัวเลข</p><h1 id="pageTitle">รับข้อความใหม่จาก LINE</h1></div>
+        <div><p class="eyebrow">ห้องวิเคราะห์ตัวเลข</p><h1 id="pageTitle">ข้อมูลเรียลไทม์</h1></div>
         <div class="top-actions"><div class="status"><span></span> เชื่อมต่อ Cloudflare</div><button class="icon-button" aria-label="การแจ้งเตือน">◌</button></div>
       </header>
 
@@ -88,6 +89,13 @@
           <div class="table-wrap realtime-table-wrap"><table><thead><tr><th>รอบ</th><th>เวลาประกาศ</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สถานะ</th></tr></thead><tbody id="historyRows"></tbody></table></div>
         </article>
         <div class="disclaimer"><strong>โปรดทราบ</strong><p>เครื่องมือนี้ใช้เพื่อจัดระเบียบและวิเคราะห์ข้อมูลย้อนหลังเท่านั้น แพทเทิร์นในอดีตไม่สามารถรับประกันผลลัพธ์ในอนาคตได้</p></div>
+      </section>
+
+      <section class="page" id="analysis">
+        <div class="analysis-hero"><div><p class="eyebrow">LIVE TECHNIQUE ANALYSIS</p><h2>สรุปการวิเคราะห์ตามล็อต</h2><p>ดึงผลจาก LINE/D1 แบ่งล็อตละ 4 รอบ ตรวจเลขแบบกลับตำแหน่งได้ และหยุดติดตามทันทีเมื่อเข้าเป้าในล็อต</p></div><button id="refreshAnalysis" type="button">คำนวณข้อมูลล่าสุด ↻</button></div>
+        <div class="analysis-summary-strip"><div><span>วันที่วิเคราะห์</span><strong id="analysisDate">—</strong></div><div><span>ข้อมูลทั้งหมด</span><strong id="analysisFilled">0 / 264</strong></div><div><span>ล็อตที่เข้าเทคนิค</span><strong id="analysisTriggered">0</strong></div><div><span>ล็อตที่เข้าเป้า</span><strong id="analysisPassed">0</strong></div></div>
+        <div class="analysis-legend"><span><i class="signal"></i> สีสัญญาณ: ตำแหน่งที่เข้าเทคนิค</span><span><i class="success"></i> สีผลลัพธ์: เลขที่ทำนายถูก (สลับตำแหน่งได้)</span></div>
+        <section class="analysis-lot-grid" id="analysisLotGrid"><p class="analysis-empty">กำลังรอข้อมูลจากหน้าเรียลไทม์</p></section>
       </section>
 
       <section class="page" id="three">
@@ -149,7 +157,8 @@
       </section>
     </main>
   </div>
+  <dialog class="analysis-dialog" id="analysisDialog"><div class="dialog-head"><div><p class="eyebrow">ANALYSIS DETAIL</p><h3 id="analysisDialogTitle">รายละเอียดการวิเคราะห์</h3></div><button id="closeAnalysisDialog" type="button" aria-label="ปิด">×</button></div><div id="analysisDialogBody"></div></dialog>
   <script src="./mock-264.js?v=10"></script>
-  <script src="./app.js?v=12"></script>
+  <script src="./app.js?v=14"></script>
 </body>
 </html>

@@ -1,12 +1,13 @@
 const navItems = document.querySelectorAll('.nav-item');
 const pages = document.querySelectorAll('.page');
-const titles = { dashboard: 'รับข้อความใหม่จาก LINE', three: 'คำนวณชุด 3 หลัก', four: 'วิเคราะห์ 264 รอบ', guide: 'คู่มือเทคนิค' };
+const titles = { dashboard: 'ข้อมูลเรียลไทม์', analysis: 'สรุปผลวิเคราะห์', three: 'คำนวณชุด 3 หลัก', four: 'วิเคราะห์ 264 รอบ', guide: 'คู่มือเทคนิค' };
 function showPage(target, item) {
   navItems.forEach((nav) => nav.classList.toggle('active', nav === item));
   pages.forEach((page) => page.classList.toggle('active', page.id === target));
   document.getElementById('pageTitle').textContent = titles[target];
   document.getElementById('sidebar').classList.remove('open');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (target === 'analysis') renderAnalysisDashboard();
 }
 
 const realtimeDateInput = document.getElementById('realtimeDate');
@@ -67,6 +68,97 @@ function renderIntakeStats(stats = {}) {
   document.getElementById('statUnreadable').textContent = stats.unreadable_messages || 0;
 }
 
+function permutationKey(value) { return [...String(value)].sort().join(''); }
+function matchesAnyPermutation(value, targets = []) { return targets.some((target) => permutationKey(value) === permutationKey(target)); }
+function analysisDigits(value, kinds = []) { return [...value].map((digit, index) => `<i class="${kinds[index] || ''}">${digit}</i>`).join(''); }
+function analysisSignalPositions(item, signals) {
+  const top = ['', '', ''], bottom = ['', ''];
+  signals.forEach((signal) => {
+    if (signal.tone === 'jeeb') top.fill('tech-signal');
+    if (signal.tone === 'sibling' || signal.tone === 'same') { top[2] = 'tech-signal'; bottom[0] = 'tech-signal'; }
+    if (signal.tone === 'running') { top[2] = 'tech-signal'; bottom.fill('tech-signal'); }
+    if (signal.tone === 'hunt') {
+      const pair = huntSignalPairs.find((value) => item.top_number.includes(value) || item.bottom_number.includes(value));
+      const topAt = pair ? item.top_number.indexOf(pair) : -1, bottomAt = pair ? item.bottom_number.indexOf(pair) : -1;
+      if (topAt >= 0) { top[topAt] = 'tech-signal'; top[topAt + 1] = 'tech-signal'; }
+      if (bottomAt >= 0) { bottom[bottomAt] = 'tech-signal'; bottom[bottomAt + 1] = 'tech-signal'; }
+    }
+  });
+  return { top, bottom };
+}
+
+function predictionsFromRound(item, roundInLot) {
+  const predictions = [];
+  const top = item.top_number, bottom = item.bottom_number;
+  const groups = matchingGroups(top);
+  if (groups.length) predictions.push({ name: 'จีบเรียง → จปล', tone: 'jeeb', top: expandJeeb(top), bottom: expandTwoDigitRows(top.slice(-2)).flat(), note: `พบ ${top} ในกลุ่ม ${groups.map((group) => group.index + 1).join(', ')}` });
+  const rule = ruleTrigger(top, bottom);
+  if (rule.trick1) predictions.push({ name: 'พี่น้อง → เบิ้ล/จปร.', tone: 'sibling', top: [], bottom: [...doubleNumbers, ...jprNumbers], note: `หน่วยบน ${top[2]} เทียบสิบล่าง ${bottom[0]}` });
+  if (rule.trick2) predictions.push({ name: 'รูซ้ำ → พี่น้อง', tone: 'same', top: [], bottom: ['01','10','12','21','23','32','34','43','45','54','56','65','67','76','78','87','89','98','90','09'], note: `พบเลขซ้ำ ${top[2]}–${bottom[0]}` });
+  const hunt = huntSignalPairs.find((pair) => top.includes(pair) || bottom.includes(pair));
+  if (hunt) predictions.push({ name: 'ล่าเลข 43/48/53/58', tone: 'hunt', top: [], bottom: huntTargetPairs, note: `พบสัญญาณ ${hunt}` });
+  if (roundInLot === 1) {
+    const seed = top[2] + bottom;
+    predictions.push({ name: 'เลขวิ่งจากรอบแรก', tone: 'running', top: expandJeeb(seed), bottom: [], note: `ตั้งต้น ${seed}` });
+  }
+  return predictions;
+}
+
+function renderAnalysisDashboard() {
+  const grid = document.getElementById('analysisLotGrid');
+  if (!grid) return;
+  const byRound = new Map(realtimeResults.map((item) => [Number(item.round_no), item]));
+  let triggeredLots = 0, passedLots = 0;
+  const cards = [];
+  for (let lot = 1; lot <= 66; lot += 1) {
+    const start = (lot - 1) * 4 + 1;
+    const items = Array.from({ length: 4 }, (_, offset) => byRound.get(start + offset) || null);
+    const events = [], roundStates = Array.from({ length: 4 }, () => ({ signals: [], hit: null }));
+    let active = [], passed = false;
+    for (let offset = 0; offset < 4; offset += 1) {
+      const item = items[offset];
+      if (!item || passed) continue;
+      const hit = active.find((prediction) => matchesAnyPermutation(item.top_number, prediction.top) || matchesAnyPermutation(item.top_number.slice(-2), prediction.bottom) || matchesAnyPermutation(item.bottom_number, prediction.bottom));
+      if (hit) {
+        const matchedAt = matchesAnyPermutation(item.top_number, hit.top) ? `3 ตัวบน ${item.top_number}` : (matchesAnyPermutation(item.top_number.slice(-2), hit.bottom) ? `สองตัวท้ายบน ${item.top_number.slice(-2)}` : `2 ตัวล่าง ${item.bottom_number}`);
+        roundStates[offset].hit = { ...hit, matchedAt };
+        events.push({ type: 'hit', round: start + offset, text: `${hit.name} เข้าเป้าที่ ${matchedAt}` });
+        passed = true;
+        active = [];
+        continue;
+      }
+      const signals = predictionsFromRound(item, offset + 1).map((prediction) => ({ ...prediction, sourceRound: start + offset }));
+      roundStates[offset].signals = signals;
+      active.push(...signals);
+      signals.forEach((signal) => events.push({ type: 'signal', round: start + offset, text: `${signal.name}: ${signal.note}` }));
+    }
+    const hasSignal = events.some((event) => event.type === 'signal');
+    if (hasSignal) triggeredLots += 1;
+    if (passed) passedLots += 1;
+    const status = passed ? 'passed' : (hasSignal ? 'tracking' : 'quiet');
+    const rows = items.map((item, offset) => {
+      const round = start + offset, state = roundStates[offset];
+      const signalPositions = item ? analysisSignalPositions(item, state.signals) : { top: [], bottom: [] };
+      const topKinds = state.hit ? (state.hit.matchedAt.startsWith('3 ตัวบน') ? ['result-hit','result-hit','result-hit'] : (state.hit.matchedAt.startsWith('สองตัวท้าย') ? ['', 'result-hit','result-hit'] : ['', '', ''])) : signalPositions.top;
+      const bottomKinds = state.hit?.matchedAt.startsWith('2 ตัวล่าง') ? ['result-hit','result-hit'] : signalPositions.bottom;
+      return `<div class="analysis-round ${state.hit ? 'is-hit' : ''} ${state.signals.length ? 'has-signal' : ''}"><span>${String(round).padStart(3, '0')}</span><b>${item ? analysisDigits(item.top_number, topKinds) : '— — —'}</b><b>${item ? analysisDigits(item.bottom_number, bottomKinds) : '— —'}</b><em>${state.hit ? '✓ ถูก' : (state.signals.length ? 'เข้าเทคนิค' : (item ? '—' : 'รอผล'))}</em></div>`;
+    }).join('');
+    const detail = `<div class="dialog-lot-status ${status}"><b>${passed ? '✓ ล็อตนี้ทำนายถูก' : (hasSignal ? 'กำลังติดตาม แต่ยังไม่เข้าเป้า' : 'ยังไม่มีสัญญาณ')}</b><span>ตรวจแบบสลับตำแหน่งทั้งหมด เช่น 135 = 351 และ 23 = 32</span></div>${events.length ? events.map((event) => `<div class="dialog-event ${event.type}"><b>รอบ ${event.round}</b><span>${event.text}</span></div>`).join('') : '<p>ยังไม่มีรายละเอียดการวิเคราะห์</p>'}`;
+    cards.push(`<article class="analysis-lot-card ${status}"><header><div><span>ล็อต ${String(lot).padStart(2, '0')}</span><small>รอบ ${start}–${start + 3}</small></div><strong>${passed ? 'ผ่าน' : (hasSignal ? 'ติดตาม' : 'ไม่มีสัญญาณ')}</strong></header><div class="analysis-round-head"><span>รอบ</span><span>3 ตัวบน</span><span>2 ตัวล่าง</span><span>ผล</span></div>${rows}<button class="analysis-more" type="button" data-title="ล็อต ${String(lot).padStart(2, '0')} · รอบ ${start}–${start + 3}" data-detail="${encodeURIComponent(detail)}">ดูเพิ่มเติม</button></article>`);
+  }
+  document.getElementById('analysisDate').textContent = realtimePayload?.draw_date || realtimeDateInput.value || '—';
+  document.getElementById('analysisFilled').textContent = `${realtimeResults.length} / 264`;
+  document.getElementById('analysisTriggered').textContent = triggeredLots;
+  document.getElementById('analysisPassed').textContent = passedLots;
+  grid.innerHTML = cards.join('');
+}
+
+function openAnalysisDialog(title, html) {
+  document.getElementById('analysisDialogTitle').textContent = title;
+  document.getElementById('analysisDialogBody').innerHTML = html;
+  document.getElementById('analysisDialog').showModal();
+}
+
 async function loadRealtimeResults({ quiet = false } = {}) {
   const date = realtimeDateInput.value || thailandDate();
   const sourceId = realtimeSourceSelect.value;
@@ -85,6 +177,7 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     const results = payload.results || [];
     renderRealtimeRows(results);
     renderIntakeStats(payload.stats);
+    renderAnalysisDashboard();
     document.getElementById('realtimeFilled').textContent = payload.filled || 0;
     document.getElementById('realtimeGroupName').textContent = payload.source?.source_name || 'ยังไม่พบกลุ่ม';
     document.getElementById('realtimeDateLabel').textContent = payload.draw_date || date;
@@ -219,6 +312,13 @@ document.getElementById('editRealtime').addEventListener('click', () => setRealt
 document.getElementById('cancelRealtime').addEventListener('click', () => setRealtimeEditMode(false));
 document.getElementById('saveRealtime').addEventListener('click', saveRealtimeTable);
 document.getElementById('deleteRealtime').addEventListener('click', deleteRealtimeData);
+document.getElementById('refreshAnalysis').addEventListener('click', async () => { await loadRealtimeResults(); renderAnalysisDashboard(); });
+document.getElementById('analysisLotGrid').addEventListener('click', (event) => {
+  const button = event.target.closest('.analysis-more');
+  if (button) openAnalysisDialog(button.dataset.title, decodeURIComponent(button.dataset.detail));
+});
+document.getElementById('closeAnalysisDialog').addEventListener('click', () => document.getElementById('analysisDialog').close());
+document.getElementById('analysisDialog').addEventListener('click', (event) => { if (event.target.id === 'analysisDialog') event.target.close(); });
 realtimeDateInput.addEventListener('change', async () => { await loadRealtimeSources({ preserve: false }); await loadRealtimeResults(); await loadDailyHistory(); });
 realtimeSourceSelect.addEventListener('change', () => loadRealtimeResults());
 loadRealtimeSources().then(() => loadRealtimeResults()).catch(() => loadRealtimeResults());
@@ -631,14 +731,17 @@ function analyzeDailyRounds() {
     topPreview.innerHTML = digitPreviewHtml(top, topClasses);
     bottomPreview.innerHTML = digitPreviewHtml(bottom, bottomClasses);
     row.classList.add('numbers-analyzed');
-    resultCell.innerHTML = resultBlocks.length ? resultBlocks.join('') : '<span class="result-empty">ยังไม่พบสัญญาณในรอบนี้</span>';
+    const detailHtml = resultBlocks.length ? resultBlocks.join('') : '<span class="result-empty">ยังไม่พบสัญญาณในรอบนี้</span>';
+    row.dataset.hitTarget = hitReasons.length ? '1' : '0';
+    row.dataset.analysisDetail = encodeURIComponent(detailHtml);
+    resultCell.innerHTML = `<button class="daily-detail-button" type="button">ดูเพิ่มเติม</button><small>${hitReasons.length ? '✓ พบผลเข้าเป้า' : (resultBlocks.length ? `${resultBlocks.length} รายการวิเคราะห์` : 'ยังไม่มีสัญญาณ')}</small>`;
   });
 
   for (let lot = 1; lot <= 66; lot += 1) {
     const rows = allDailyRows.filter((row) => Number(row.dataset.lot) === lot);
     const complete = rows.every((row) => /^\d{3}$/.test(row.querySelector('.daily-top').value) && /^\d{2}$/.test(row.querySelector('.daily-bottom').value));
     if (!complete) continue;
-    const predicted = rows.some((row) => row.querySelector('.daily-result').innerText.includes('เข้าเป้า'));
+    const predicted = rows.some((row) => row.dataset.hitTarget === '1');
     rows.forEach((row) => row.classList.add(predicted ? 'lot-predicted' : 'lot-missed'));
     const badge = document.createElement('span');
     badge.className = `lot-verdict ${predicted ? 'yes' : 'no'}`;
@@ -668,6 +771,12 @@ dailyRows.addEventListener('click', (event) => {
 
 dailyDate.addEventListener('change', renderDailyTable);
 document.getElementById('analyzeRounds').addEventListener('click', analyzeDailyRounds);
+dailyRows.addEventListener('click', (event) => {
+  const button = event.target.closest('.daily-detail-button');
+  if (!button) return;
+  const row = button.closest('tr');
+  openAnalysisDialog(`รายละเอียดรอบ ${row.dataset.dailyRound} · ล็อต ${row.dataset.lot}`, decodeURIComponent(row.dataset.analysisDetail || ''));
+});
 document.getElementById('importRounds').addEventListener('click', () => {
   const lines = document.getElementById('bulkInput').value.trim().split(/\n+/).filter(Boolean).slice(0, 264);
   const rows = [...dailyRows.querySelectorAll('tr')];
