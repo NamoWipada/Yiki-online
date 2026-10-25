@@ -19,6 +19,30 @@ const EXPECTED_ROUNDS = 264;
 let realtimeEditing = false;
 let realtimeResults = [];
 let realtimePayload = null;
+const TECHNIQUE_DEFAULTS = { jeeb: true, sibling: true, same: true, hunt: true, running: true };
+const TECHNIQUE_STORAGE_KEY = 'yiki-enabled-techniques';
+function loadTechniqueSettings() {
+  try { return { ...TECHNIQUE_DEFAULTS, ...JSON.parse(localStorage.getItem(TECHNIQUE_STORAGE_KEY) || '{}') }; }
+  catch { return { ...TECHNIQUE_DEFAULTS }; }
+}
+let enabledTechniques = loadTechniqueSettings();
+function isTechniqueEnabled(key) { return enabledTechniques[key] !== false; }
+function saveTechniqueSettings() { localStorage.setItem(TECHNIQUE_STORAGE_KEY, JSON.stringify(enabledTechniques)); }
+function syncTechniqueControls() {
+  document.querySelectorAll('[data-technique-toggle]').forEach((input) => {
+    input.checked = isTechniqueEnabled(input.dataset.techniqueToggle);
+    input.closest('.technique-switch-card')?.classList.toggle('disabled', !input.checked);
+  });
+  const count = Object.keys(TECHNIQUE_DEFAULTS).filter(isTechniqueEnabled).length;
+  const counter = document.getElementById('enabledTechniqueCount');
+  if (counter) counter.textContent = `${count} / ${Object.keys(TECHNIQUE_DEFAULTS).length} เปิดใช้งาน`;
+}
+function applyTechniqueSettings(next) {
+  enabledTechniques = { ...TECHNIQUE_DEFAULTS, ...next };
+  saveTechniqueSettings();
+  syncTechniqueControls();
+  renderAnalysisDashboard();
+}
 
 function thailandDate() {
   const parts = new Intl.DateTimeFormat('en', {
@@ -90,7 +114,7 @@ function analysisSignalPositions(item, signals) {
 function predictionsFromRound(item, roundInLot) {
   const predictions = [];
   const top = item.top_number, bottom = item.bottom_number;
-  const groups = matchingGroups(top);
+  const groups = isTechniqueEnabled('jeeb') ? matchingGroups(top) : [];
   if (groups.length) {
     const rows = expandThreeToTwoRows(top);
     predictions.push({ name: 'จีบเรียง → จปล 12 คู่', tone: 'jeeb', top: [], bottom: rows.flat(), rows, note: `พบ ${top} ในกลุ่ม ${groups.map((group) => group.index + 1).join(', ')} จึงแปลงเลข 3 หลักเป็นคู่ 2 หลัก 12 ตัว` });
@@ -99,8 +123,8 @@ function predictionsFromRound(item, roundInLot) {
   if (rule.trick1) predictions.push({ name: 'พี่น้อง → เบิ้ล/จปร.', tone: 'sibling', top: [], bottom: [...doubleNumbers, ...jprNumbers], note: `หน่วยบน ${top[2]} เทียบสิบล่าง ${bottom[0]}` });
   if (rule.trick2) predictions.push({ name: 'รูซ้ำ → พี่น้อง', tone: 'same', top: [], bottom: ['01','10','12','21','23','32','34','43','45','54','56','65','67','76','78','87','89','98','90','09'], note: `พบเลขซ้ำ ${top[2]}–${bottom[0]}` });
   const hunt = huntSignalPairs.find((pair) => top.includes(pair) || bottom.includes(pair));
-  if (hunt) predictions.push({ name: 'ล่าเลข 43/48/53/58', tone: 'hunt', top: [], bottom: huntTargetPairs, note: `พบสัญญาณ ${hunt}` });
-  if (roundInLot === 1) {
+  if (hunt && isTechniqueEnabled('hunt')) predictions.push({ name: 'ล่าเลข 43/48/53/58', tone: 'hunt', top: [], bottom: huntTargetPairs, note: `พบสัญญาณ ${hunt}` });
+  if (roundInLot === 1 && isTechniqueEnabled('running')) {
     const seed = top[2] + bottom;
     predictions.push({ name: 'เลขวิ่งจากรอบแรก', tone: 'running', top: expandJeeb(seed), bottom: [], note: `ตั้งต้น ${seed}` });
   }
@@ -170,7 +194,7 @@ function renderAnalysisDashboard() {
       const signalPositions = item ? analysisSignalPositions(item, state.signals) : { top: [], bottom: [] };
       const topKinds = hit ? (hit.matchedAt.startsWith('3 ตัวบน') ? ['result-hit','result-hit','result-hit'] : (hit.matchedAt.startsWith('สองตัวท้าย') ? ['', 'result-hit','result-hit'] : ['', '', ''])) : signalPositions.top;
       const bottomKinds = hit?.matchedAt.startsWith('2 ตัวล่าง') ? ['result-hit','result-hit'] : signalPositions.bottom;
-      const techniqueText = state.hits.length ? `✓ ถูกเทคนิค ${state.hits.map((value) => `${value.name} · จากรอบ ${String(value.sourceRound).padStart(3, '0')} · ตาม ${value.elapsed}/6`).join(' + ')}` : (state.signals.length ? `เข้า ${state.signals.map((signal) => signal.name).join(' + ')} · ตาม 6 รอบ` : (state.expired.length ? `ไม่เข้าเทคนิค · ครบ 6 รอบ (${state.expired.map((value) => value.name).join(', ')})` : (item ? 'ยังไม่เข้าเทคนิค' : 'รอผล')));
+      const techniqueText = state.hits.length ? `✓ ถูกเทคนิค ${state.hits.map((value) => `${value.name} · จากรอบ ${String(value.sourceRound).padStart(3, '0')} · ตาม ${value.elapsed}/6`).join(' + ')}` : (state.signals.length ? `เข้า ${state.signals.map((signal) => signal.name).join(' + ')} · ตาม 6 รอบ` : (state.expired.length ? `ไม่เข้าเทคนิค · ครบ 6 รอบ (${state.expired.map((value) => value.name).join(', ')})` : (item ? (Object.keys(TECHNIQUE_DEFAULTS).some(isTechniqueEnabled) ? 'ยังไม่เข้าเทคนิค' : 'ปิดทุกเทคนิค') : 'รอผล')));
       const currentDetail = item ? `<div class="dialog-round-result"><div><small>ผลรอบ ${String(round).padStart(3, '0')}</small><b>บน ${analysisDigits(item.top_number, topKinds)} <i>·</i> ล่าง ${analysisDigits(item.bottom_number, bottomKinds)}</b></div><strong class="${state.hits.length ? 'hit' : (state.signals.length ? 'signal' : '')}">${techniqueText}</strong></div>` : `<div class="dialog-lot-status"><b>รอบ ${String(round).padStart(3, '0')} ยังไม่มีผล</b><span>ระบบจะแสดงการคำนวณอัตโนมัติเมื่อได้รับข้อมูลจาก LINE</span></div>`;
       const hitDetail = state.hits.length ? `<section class="dialog-hit-proof"><h4>ผลการทำนายก่อนหน้า · ถูกเทคนิค</h4>${state.hits.map((value) => `<p><b>${value.name}</b> จากรอบ ${String(value.sourceRound).padStart(3, '0')} ถูกเทคนิคที่ <strong>${value.matchedAt}</strong> ในรอบติดตาม ${value.elapsed}/6</p><p>ระบบเทียบแบบกลับตำแหน่ง จึงถือว่า 135 = 351 = 153 และ 23 = 32</p>${predictionDetail(value)}`).join('')}</section>` : '';
       const signalDetail = state.signals.length ? `<section class="dialog-calculation"><h4>การวิเคราะห์ทำนายรอบถัดไป</h4>${state.signals.map(predictionDetail).join('')}</section>` : (item ? '<p class="dialog-empty-note">รอบนี้ยังไม่เข้าเงื่อนไขของเทคนิคที่ตั้งไว้ จึงยังไม่สร้างชุดแนะนำใหม่</p>' : '');
@@ -348,6 +372,12 @@ document.getElementById('cancelRealtime').addEventListener('click', () => setRea
 document.getElementById('saveRealtime').addEventListener('click', saveRealtimeTable);
 document.getElementById('deleteRealtime').addEventListener('click', deleteRealtimeData);
 document.getElementById('refreshAnalysis').addEventListener('click', async () => { await loadRealtimeResults(); renderAnalysisDashboard(); });
+document.querySelectorAll('[data-technique-toggle]').forEach((input) => input.addEventListener('change', () => {
+  applyTechniqueSettings({ ...enabledTechniques, [input.dataset.techniqueToggle]: input.checked });
+}));
+document.getElementById('enableAllTechniques').addEventListener('click', () => applyTechniqueSettings({ ...TECHNIQUE_DEFAULTS }));
+document.getElementById('disableAllTechniques').addEventListener('click', () => applyTechniqueSettings(Object.fromEntries(Object.keys(TECHNIQUE_DEFAULTS).map((key) => [key, false]))));
+syncTechniqueControls();
 document.getElementById('analysisLotGrid').addEventListener('click', (event) => {
   const button = event.target.closest('.analysis-more');
   if (button) openAnalysisDialog(button.dataset.title, decodeURIComponent(button.dataset.detail));
@@ -399,8 +429,8 @@ function ruleTrigger(top, bottom) {
   const topUnit = top[2];
   const bottomTens = bottom[0];
   return {
-    trick1: isSiblingPair(topUnit, bottomTens),
-    trick2: topUnit === bottomTens,
+    trick1: isTechniqueEnabled('sibling') && isSiblingPair(topUnit, bottomTens),
+    trick2: isTechniqueEnabled('same') && topUnit === bottomTens,
     pair: `${topUnit}${bottomTens}`,
   };
 }
@@ -425,12 +455,12 @@ function pairRangeTargets(pair) { return unique(expandTwoDigitRows(pair).flat())
 function independentTechniqueData(top, bottom, context = {}) {
   const cards = [], topTargets = [], bottomTargets = [], reasons = [];
   const foundSignal = huntSignalPairs.find((pair) => top.includes(pair) || bottom.includes(pair));
-  if (foundSignal) {
+  if (foundSignal && isTechniqueEnabled('hunt')) {
     const ranges = huntTargetPairs.map((pair) => `${pair}0–${pair}9`);
     cards.push(`<article class="extra-technique hunt"><b>เทคนิค 3 · สัญญาณล่าเลขจาก ${foundSignal}</b><span>แนะนำ 43, 48, 53, 58 แล้วลากเป็นเลข 3 ตัว</span><small>${ranges.join(' · ')} · ติดตามไม่เกิน 6 รอบ พบแล้วหยุด</small></article>`);
     topTargets.push(...ranges); bottomTargets.push(...huntTargetPairs); reasons.push(`สีม่วง: พบชุดล่าเลข ${foundSignal}`);
   }
-  if (context.roundInLot === 1) {
+  if (context.roundInLot === 1 && isTechniqueEnabled('running')) {
     const seed = top[2] + bottom, targets = expandJeeb(seed);
     cards.push(`<article class="extra-technique running"><b>เทคนิค 4 · จับเลขวิ่งจากรอบแรก</b><span>หน่วยบน ${top[2]} + เลขล่าง ${bottom} = ${seed}</span><small>เลข 3 ตัว: ${targets.join(', ')} · ติดตาม 8–10 รอบ</small></article>`);
     topTargets.push(...targets); bottomTargets.push(...targets.map((value) => value.slice(-2))); reasons.push('สีฟ้า: หน่วยบน + สองตัวล่างของรอบแรก');
@@ -535,7 +565,7 @@ document.getElementById('loadMockLot').addEventListener('click', () => {
     { top: '383', bottom: '61' },
   ];
   const rounds = mockRounds.map(({ top, bottom }, index) => {
-    const groups = matchingGroups(top);
+    const groups = isTechniqueEnabled('jeeb') ? matchingGroups(top) : [];
     const context = { roundInLot: index + 1, previousTop: mockRounds[index - 1]?.top, twoBackTop: mockRounds[index - 2]?.top, twoBackBottom: mockRounds[index - 2]?.bottom };
     return { top, bottom, status: groups.length ? 'won' : 'miss', output: buildRoundOutput(top, bottom, groups, context) };
   });
@@ -564,7 +594,7 @@ document.getElementById('roundWorkspace').addEventListener('click', (event) => {
     card.querySelector('.round-status strong').textContent = 'กรอกตัวเลขให้ครบ';
     return;
   }
-  const groups = matchingGroups(top);
+  const groups = isTechniqueEnabled('jeeb') ? matchingGroups(top) : [];
   const round = activeLot.rounds[index];
   const context = { roundInLot: index + 1, previousTop: activeLot.rounds[index - 1]?.top, twoBackTop: activeLot.rounds[index - 2]?.top, twoBackBottom: activeLot.rounds[index - 2]?.bottom };
   round.top = top; round.bottom = bottom; round.output = buildRoundOutput(top, bottom, groups, context);
@@ -703,7 +733,7 @@ function analyzeDailyRounds() {
       }
     });
 
-    const groups = matchingGroups(top);
+    const groups = isTechniqueEnabled('jeeb') ? matchingGroups(top) : [];
     if (!groups.length) {
       matchCell.innerHTML = '<span class="no-hit">ไม่พบ</span>'; hitCell.textContent = '—'; pairCell.textContent = '—';
     } else {

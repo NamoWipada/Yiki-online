@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css?v=10" />
   <link rel="stylesheet" href="./enhancements.css?v=11" />
-  <link rel="stylesheet" href="./realtime-template.css?v=4" />
+  <link rel="stylesheet" href="./realtime-template.css?v=5" />
 </head>
 <body>
   <div class="shell">
@@ -94,6 +94,17 @@
       <section class="page" id="analysis">
         <div class="analysis-hero"><div><p class="eyebrow">LIVE TECHNIQUE ANALYSIS</p><h2>สรุปการวิเคราะห์ตามล็อต</h2><p>ดึงผลจาก LINE/D1 แบ่งล็อตละ 4 รอบ และติดตามผลของทุกเทคนิคไม่เกิน 6 รอบ หากครบกำหนดแล้วยังไม่พบจะตัดจบเป็นไม่เข้าเทคนิค</p></div><button id="refreshAnalysis" type="button">คำนวณข้อมูลล่าสุด ↻</button></div>
         <div class="analysis-summary-strip"><div><span>วันที่วิเคราะห์</span><strong id="analysisDate">—</strong></div><div><span>ข้อมูลทั้งหมด</span><strong id="analysisFilled">0 / 264</strong></div><div><span>ล็อตที่เข้าเทคนิค</span><strong id="analysisTriggered">0</strong></div><div><span>ล็อตที่ถูกเทคนิค</span><strong id="analysisPassed">0</strong></div></div>
+        <details class="technique-switcher" open>
+          <summary><span><b>เปิด–ปิดเทคนิคที่ใช้วิเคราะห์</b><small>ปิดแล้วจะไม่สร้างคำทำนายและไม่นับรอบติดตามของเทคนิคนั้น</small></span><strong id="enabledTechniqueCount">5 / 5 เปิดใช้งาน</strong></summary>
+          <div class="technique-switch-grid">
+            <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="jeeb" checked /><i></i><span><b>จีบเรียง → จปล 12 คู่</b><small>แปลง 3 หลักเป็นคู่ 2 หลัก</small></span></label>
+            <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="sibling" checked /><i></i><span><b>พี่น้อง → เบิ้ล/จปร.</b><small>เทียบหน่วยบนกับสิบล่าง</small></span></label>
+            <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="same" checked /><i></i><span><b>รูซ้ำ → พี่น้อง</b><small>เลขตำแหน่งเทียบเป็นตัวเดียวกัน</small></span></label>
+            <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="hunt" checked /><i></i><span><b>ล่าเลข 43/48/53/58</b><small>ตรวจสัญญาณ 33, 88, 38, 83</small></span></label>
+            <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="running" checked /><i></i><span><b>เลขวิ่งจากรอบแรก</b><small>หน่วยบนต่อเลขล่าง</small></span></label>
+          </div>
+          <div class="technique-switch-actions"><button id="enableAllTechniques" type="button">เปิดทั้งหมด</button><button id="disableAllTechniques" type="button">ปิดทั้งหมด</button></div>
+        </details>
         <div class="analysis-legend"><span><i class="signal"></i> สีสัญญาณ: ตำแหน่งที่เข้าเทคนิค</span><span><i class="success"></i> สีผลลัพธ์: เลขที่ทำนายถูก (สลับตำแหน่งได้)</span></div>
         <section class="analysis-lot-grid analysis-table-shell" id="analysisLotGrid"><p class="analysis-empty">กำลังรอข้อมูลจากหน้าเรียลไทม์</p></section>
       </section>
@@ -159,6 +170,6 @@
   </div>
   <dialog class="analysis-dialog" id="analysisDialog"><div class="dialog-head"><div><p class="eyebrow">ANALYSIS DETAIL</p><h3 id="analysisDialogTitle">รายละเอียดการวิเคราะห์</h3></div><button id="closeAnalysisDialog" type="button" aria-label="ปิด">×</button></div><div id="analysisDialogBody"></div></dialog>
   <script src="./mock-264.js?v=10"></script>
-  <script src="./app.js?v=17"></script>
+  <script src="./app.js?v=18"></script>
 </body>
 </html>
