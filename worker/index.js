@@ -442,7 +442,14 @@ async function handleApi(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) return handleApi(request, env);
+    if (url.pathname.startsWith("/api/")) {
+      try {
+        return await handleApi(request, env);
+      } catch (error) {
+        console.error("API error", url.pathname, error);
+        return json({ ok: false, error: "เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง" }, 500);
+      }
+    }
     return env.ASSETS.fetch(request);
   },
 };
