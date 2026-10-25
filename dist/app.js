@@ -9,30 +9,68 @@ function showPage(target, item) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Mock lot transcribed from the first four rows in the supplied reference photo.
-// Keeping this as structured data lets the calculation modules consume it next.
-const mockLot = [
-  { round: 1, time: '18:25', top: '279', bottom: '12' },
-  { round: 2, time: '18:30', top: '946', bottom: '19' },
-  { round: 3, time: '18:35', top: '208', bottom: '84' },
-  { round: 4, time: '18:40', top: '884', bottom: '67' },
-];
+const realtimeDateInput = document.getElementById('realtimeDate');
+const historyRows = document.getElementById('historyRows');
 
-window.yikiMockData = { lot: '24 OCT · 18:40', rounds: mockLot };
+function thailandDate() {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
 
-const rows = [...mockLot].reverse().map((item) => `
-  <tr>
-    <td><span class="round-no">${String(item.round).padStart(2, '0')}</span></td>
-    <td>${item.time}</td><td class="mono">${item.top}</td><td class="mono">${item.bottom}</td>
-    <td><span class="verified">✓ ข้อมูลตัวอย่าง</span></td>
-  </tr>`).join('');
-document.getElementById('historyRows').innerHTML = rows;
+function renderRealtimeRows(results = []) {
+  const byRound = new Map(results.map((item) => [Number(item.round_no), item]));
+  historyRows.innerHTML = Array.from({ length: 214 }, (_, index) => {
+    const round = index + 1;
+    const item = byRound.get(round);
+    return `<tr class="${item ? 'round-received' : 'round-waiting'}">
+      <td><span class="round-no">${String(round).padStart(3, '0')}</span></td>
+      <td>${item?.draw_time || '—'}</td>
+      <td class="mono realtime-number">${item?.top_number || '— — —'}</td>
+      <td class="mono realtime-number">${item?.bottom_number || '— —'}</td>
+      <td>${item ? '<span class="verified">✓ รับข้อมูลแล้ว</span>' : '<span class="waiting">รอผล</span>'}</td>
+    </tr>`;
+  }).join('');
+}
 
-document.querySelectorAll('[data-mock-pills]').forEach((container) => {
-  container.innerHTML = mockLot.map((item) =>
-    `<i><small>รอบ ${item.round}</small> ${item.top} / ${item.bottom}</i>`
-  ).join('');
-});
+async function loadRealtimeResults({ quiet = false } = {}) {
+  const date = realtimeDateInput.value || thailandDate();
+  const message = document.getElementById('syncMessage');
+  if (!quiet) {
+    message.className = 'sync-message loading';
+    message.querySelector('span').textContent = 'กำลังโหลดข้อมูลล่าสุด';
+  }
+  try {
+    const response = await fetch(`/api/results?date=${encodeURIComponent(date)}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const results = payload.results || [];
+    renderRealtimeRows(results);
+    document.getElementById('realtimeFilled').textContent = payload.filled || 0;
+    document.getElementById('realtimeDateLabel').textContent = payload.draw_date || date;
+    const latest = results.at(-1);
+    document.getElementById('latestTop').textContent = latest?.top_number || '---';
+    document.getElementById('latestBottom').textContent = latest?.bottom_number || '--';
+    document.getElementById('latestRound').textContent = latest ? String(latest.round_no).padStart(3, '0') : '—';
+    document.getElementById('realtimeSource').textContent = latest ? `รับจาก LINE · เวลา ${latest.draw_time || 'ไม่ระบุ'}` : 'รอข้อมูลจาก LINE Webhook';
+    document.getElementById('realtimeStatus').textContent = results.length ? `อัปเดตแล้ว ${results.length} จาก 214 รอบ` : 'วันนี้ยังไม่มีผลส่งเข้ามา';
+    message.className = 'sync-message success';
+    message.querySelector('span').textContent = `ซิงก์ล่าสุด ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    remaining = 30;
+  } catch (error) {
+    renderRealtimeRows([]);
+    message.className = 'sync-message error';
+    message.querySelector('span').textContent = `เชื่อมต่อข้อมูลไม่ได้ (${error.message})`;
+  }
+}
+
+realtimeDateInput.value = thailandDate();
+renderRealtimeRows();
+document.getElementById('refreshRealtime').addEventListener('click', () => loadRealtimeResults());
+realtimeDateInput.addEventListener('change', () => loadRealtimeResults());
+loadRealtimeResults();
 
 const pairMap = { '0': '2', '1': '7', '2': '0', '3': '8', '4': '5', '5': '4', '6': '9', '7': '1', '8': '3', '9': '6' };
 const sequenceBases = ['089', '567', '243', '190', '789'];
@@ -532,11 +570,12 @@ sidebarCollapse.addEventListener('click', () => {
   sidebarCollapse.setAttribute('aria-label', shell.classList.contains('sidebar-mini') ? 'ขยายเมนูด้านข้าง' : 'พับเมนูด้านข้าง');
 });
 
-let remaining = 272;
+let remaining = 30;
 setInterval(() => {
-  remaining = remaining <= 0 ? 300 : remaining - 1;
+  remaining = remaining <= 0 ? 30 : remaining - 1;
+  if (remaining === 30) loadRealtimeResults({ quiet: true });
   const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
   const seconds = String(remaining % 60).padStart(2, '0');
   document.getElementById('countdown').textContent = `${minutes}:${seconds}`;
-  document.getElementById('progressBar').style.width = `${(remaining / 300) * 100}%`;
+  document.getElementById('progressBar').style.width = `${(remaining / 30) * 100}%`;
 }, 1000);

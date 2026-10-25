@@ -38,10 +38,10 @@
       </header>
 
       <section class="page active" id="dashboard">
-        <div class="round-strip">
-          <div><span>ล็อตปัจจุบัน</span><strong># 24 OCT · 18:40</strong></div>
-          <div><span>รอบที่</span><strong>04 / 04 · ครบล็อต</strong></div>
-          <div class="countdown"><span>ล็อตถัดไปใน</span><strong id="countdown">04:32</strong></div>
+        <div class="round-strip realtime-strip">
+          <div><span>วันที่ข้อมูล</span><strong id="realtimeDateLabel">—</strong></div>
+          <div><span>รับข้อมูลแล้ว</span><strong><i id="realtimeFilled">0</i> / 214 รอบ</strong></div>
+          <div class="countdown"><span>อัปเดตอีกครั้งใน</span><strong id="countdown">00:30</strong></div>
           <div class="progress"><i id="progressBar"></i></div>
         </div>
 
@@ -49,23 +49,24 @@
           <article class="result-card primary">
             <div class="card-head"><span>ผลรางวัลล่าสุด</span><span class="live"><i></i> LIVE</span></div>
             <div class="numbers">
-              <div><span>3 ตัวบน</span><strong class="number" id="latestTop">884</strong></div>
+              <div><span>3 ตัวบน</span><strong class="number" id="latestTop">---</strong></div>
               <em></em>
-              <div><span>2 ตัวล่าง</span><strong class="number" id="latestBottom">67</strong></div>
+              <div><span>2 ตัวล่าง</span><strong class="number" id="latestBottom">--</strong></div>
             </div>
-            <div class="source-note">ตัวเลขตัวอย่าง · ยังไม่ได้เชื่อมต่อแหล่งข้อมูลจริง</div>
+            <div class="source-note" id="realtimeSource">รอข้อมูลจาก LINE Webhook</div>
           </article>
           <article class="result-card insight">
             <div class="card-head"><span>ภาพรวมล็อตนี้</span><button aria-label="รายละเอียด">↗</button></div>
-            <div class="big-stat"><strong>4</strong><span>รอบที่<br />บันทึกแล้ว</span></div>
+            <div class="big-stat"><strong id="latestRound">—</strong><span>รอบล่าสุด<br />ที่ได้รับ</span></div>
             <div class="mini-bars"><i style="--h:35%"></i><i style="--h:62%"></i><i style="--h:48%"></i><i style="--h:82%"></i></div>
-            <p>ข้อมูลครบ 1 ล็อต · พร้อมใช้คำนวณครั้งถัดไป</p>
+            <p id="realtimeStatus">กำลังเชื่อมต่อข้อมูลจาก Cloudflare D1</p>
           </article>
         </div>
 
-        <article class="table-card">
-          <div class="section-head"><div><p class="eyebrow">LOT HISTORY</p><h2>ผลย้อนหลัง</h2></div><button class="text-button">ดูทั้งหมด <span>→</span></button></div>
-          <div class="table-wrap"><table><thead><tr><th>รอบ</th><th>เวลาประกาศ</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สถานะ</th></tr></thead><tbody id="historyRows"></tbody></table></div>
+        <article class="table-card realtime-card">
+          <div class="section-head"><div><p class="eyebrow">REALTIME · 214 ROUNDS</p><h2>ผลรายรอบวันนี้</h2></div><div class="realtime-actions"><label>เลือกวันที่ <input id="realtimeDate" type="date" /></label><button id="refreshRealtime" class="text-button" type="button">อัปเดตตอนนี้ ↻</button></div></div>
+          <div class="sync-message" id="syncMessage"><i></i><span>กำลังโหลดข้อมูลล่าสุด</span></div>
+          <div class="table-wrap realtime-table-wrap"><table><thead><tr><th>รอบ</th><th>เวลาประกาศ</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สถานะ</th></tr></thead><tbody id="historyRows"></tbody></table></div>
         </article>
         <div class="disclaimer"><strong>โปรดทราบ</strong><p>เครื่องมือนี้ใช้เพื่อจัดระเบียบและวิเคราะห์ข้อมูลย้อนหลังเท่านั้น แพทเทิร์นในอดีตไม่สามารถรับประกันผลลัพธ์ในอนาคตได้</p></div>
       </section>
@@ -130,6 +131,6 @@
     </main>
   </div>
   <script src="./mock-264.js?v=10"></script>
-  <script src="./app.js?v=11"></script>
+  <script src="./app.js?v=12"></script>
 </body>
 </html>
