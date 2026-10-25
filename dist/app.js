@@ -276,7 +276,9 @@ function openAnalysisDialog(title, html) {
 }
 
 async function loadRealtimeResults({ quiet = false } = {}) {
-  const date = realtimeDateInput.value || thailandDate();
+  const date = thailandDate();
+  realtimeDateInput.value = date;
+  templateDateInput.value = date;
   const sourceId = realtimeSourceSelect.value;
   const message = document.getElementById('syncMessage');
   if (!quiet) {
@@ -297,14 +299,16 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     document.getElementById('realtimeFilled').textContent = payload.filled || 0;
     document.getElementById('realtimeGroupName').textContent = payload.source?.source_name || 'ยังไม่พบกลุ่ม';
     document.getElementById('realtimeDateLabel').textContent = payload.draw_date || date;
-    templateDateInput.value = payload.draw_date || date;
+    templateDateInput.value = date;
+    document.getElementById('templateCurrentDate').textContent = formatThaiDate(date);
+    document.getElementById('realtimeCurrentDate').textContent = formatThaiDate(date);
     const lineDateStatus = document.getElementById('lineDateStatus');
     if (payload.active_line_date) {
-      lineDateStatus.textContent = payload.active_line_date === (payload.draw_date || date)
-        ? `LINE กำลังบันทึกผลเข้าวันที่ ${formatThaiDate(payload.active_line_date)}`
-        : `กำลังดู ${formatThaiDate(payload.draw_date || date)} · LINE ตั้งรับผลไว้ที่ ${formatThaiDate(payload.active_line_date)}`;
+      lineDateStatus.textContent = payload.active_line_date === date
+        ? `เว็บไซต์กำลังแสดงวันนี้ · LINE กำลังบันทึกผลเข้าวันที่ ${formatThaiDate(payload.active_line_date)}`
+        : `เว็บไซต์แสดงวันนี้ ${formatThaiDate(date)} · LINE ตั้งรับผลไว้ที่ ${formatThaiDate(payload.active_line_date)}`;
     } else {
-      lineDateStatus.textContent = `เลือกวันที่จากหน้าเว็บ หรือส่งวันที่ใน LINE เช่น 10/10/2026`;
+      lineDateStatus.textContent = `เว็บไซต์แสดงผลของวันปัจจุบัน · เปลี่ยนวันที่รับข้อมูลผ่าน LINE เช่น 10/10/2026`;
     }
     const latest = results.at(-1);
     document.getElementById('latestTop').textContent = latest?.top_number || '---';
@@ -326,7 +330,9 @@ async function loadRealtimeResults({ quiet = false } = {}) {
 }
 
 async function loadRealtimeSources({ preserve = true } = {}) {
-  const date = realtimeDateInput.value || thailandDate();
+  const date = thailandDate();
+  realtimeDateInput.value = date;
+  templateDateInput.value = date;
   const previous = preserve ? realtimeSourceSelect.value : '';
   const response = await fetch(`/api/sources?date=${encodeURIComponent(date)}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -364,14 +370,8 @@ async function loadDailyHistory() {
       button.type = 'button';
       button.className = `history-day${item.draw_date === realtimeDateInput.value ? ' active' : ''}`;
       button.innerHTML = `<span>${formatThaiDate(item.draw_date)}</span><strong>${item.total_records} รายการ</strong><small>${item.source_count} กลุ่ม · รอบล่าสุด ${String(item.latest_round || 0).padStart(3, '0')}</small>`;
-      button.addEventListener('click', async () => {
-        realtimeDateInput.value = item.draw_date;
-        templateDateInput.value = item.draw_date;
-        await loadRealtimeSources({ preserve: false });
-        await loadRealtimeResults();
-        await loadDailyHistory();
-        document.querySelector('.realtime-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+      button.disabled = true;
+      button.title = 'ข้อมูลย้อนหลังเก็บไว้ใน D1 หน้าข้อมูลเรียลไทม์แสดงเฉพาะวันปัจจุบัน';
       dailyHistoryList.appendChild(button);
     });
   } catch (error) {
@@ -487,6 +487,8 @@ async function deleteRealtimeData() {
 
 realtimeDateInput.value = thailandDate();
 templateDateInput.value = realtimeDateInput.value;
+document.getElementById('templateCurrentDate').textContent = formatThaiDate(realtimeDateInput.value);
+document.getElementById('realtimeCurrentDate').textContent = formatThaiDate(realtimeDateInput.value);
 renderRealtimeRows();
 document.getElementById('refreshRealtime').addEventListener('click', async () => { await loadRealtimeSources(); await loadRealtimeResults(); await loadDailyHistory(); });
 document.getElementById('editRealtime').addEventListener('click', () => setRealtimeEditMode(true));
@@ -512,15 +514,6 @@ document.getElementById('analysisLotGrid').addEventListener('click', (event) => 
 });
 document.getElementById('closeAnalysisDialog').addEventListener('click', () => document.getElementById('analysisDialog').close());
 document.getElementById('analysisDialog').addEventListener('click', (event) => { if (event.target.id === 'analysisDialog') event.target.close(); });
-async function changeRealtimeDate(value) {
-  realtimeDateInput.value = value;
-  templateDateInput.value = value;
-  await loadRealtimeSources({ preserve: false });
-  await loadRealtimeResults();
-  await loadDailyHistory();
-}
-realtimeDateInput.addEventListener('change', () => changeRealtimeDate(realtimeDateInput.value));
-templateDateInput.addEventListener('change', () => changeRealtimeDate(templateDateInput.value));
 realtimeSourceSelect.addEventListener('change', () => loadRealtimeResults());
 loadRealtimeSources().then(() => loadRealtimeResults()).catch(() => loadRealtimeResults());
 loadDailyHistory();
