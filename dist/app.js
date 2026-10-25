@@ -1,6 +1,6 @@
 const navItems = document.querySelectorAll('.nav-item');
 const pages = document.querySelectorAll('.page');
-const titles = { dashboard: 'ผลเรียลไทม์', three: 'คำนวณชุด 3 หลัก', four: 'วิเคราะห์ 264 รอบ', guide: 'คู่มือเทคนิค' };
+const titles = { dashboard: 'รับข้อความใหม่จาก LINE', three: 'คำนวณชุด 3 หลัก', four: 'วิเคราะห์ 264 รอบ', guide: 'คู่มือเทคนิค' };
 function showPage(target, item) {
   navItems.forEach((nav) => nav.classList.toggle('active', nav === item));
   pages.forEach((page) => page.classList.toggle('active', page.id === target));
@@ -64,7 +64,7 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     document.getElementById('realtimeStatus').textContent = results.length ? `อัปเดตแล้ว ${results.length} จาก 214 รอบ` : 'วันนี้ยังไม่มีผลส่งเข้ามา';
     message.className = 'sync-message success';
     const receipt = payload.last_receipt;
-    const receiptText = receipt ? ` · ข้อความล่าสุด: ใหม่ ${receipt.inserted_rows} / แก้ไข ${receipt.updated_rows} / ซ้ำ ${receipt.ignored_rows}` : '';
+    const receiptText = receipt ? ` · ข้อความล่าสุด: เพิ่มใหม่ ${receipt.inserted_rows} / ข้ามรอบที่มีแล้ว ${receipt.ignored_rows}` : '';
     message.querySelector('span').textContent = `ซิงก์ล่าสุด ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}${receiptText}`;
     remaining = 30;
   } catch (error) {

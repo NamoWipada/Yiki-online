@@ -60,6 +60,24 @@ function bangkokDate(timestamp) {
   }).format(new Date(timestamp));
 }
 
+function extractMessageDate(text, fallbackTimestamp = Date.now()) {
+  const slashDate = text.match(/(?:^|\D)(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\D|$)/);
+  if (slashDate) {
+    let year = Number(slashDate[3]);
+    if (year < 100) year += 2000;
+    if (year > 2400) year -= 543;
+    const month = Number(slashDate[2]);
+    const day = Number(slashDate[1]);
+    const valid = new Date(Date.UTC(year, month - 1, day));
+    if (valid.getUTCFullYear() === year && valid.getUTCMonth() === month - 1 && valid.getUTCDate() === day) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+  const isoDate = text.match(/(?:^|\D)(20\d{2})-(\d{2})-(\d{2})(?:\D|$)/);
+  if (isoDate) return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
+  return bangkokDate(fallbackTimestamp);
+}
+
 async function saveLineEvents(payload, env) {
   const summary = { accepted: 0, inserted: 0, updated: 0, ignored: 0, rejected: 0, sources: [] };
   for (const event of payload.events || []) {
@@ -72,7 +90,7 @@ async function saveLineEvents(payload, env) {
       continue;
     }
     const occurredAt = new Date(event.timestamp || Date.now()).toISOString();
-    const drawDate = bangkokDate(event.timestamp || Date.now());
+    const drawDate = extractMessageDate(event.message.text, event.timestamp || Date.now());
     const receivedBefore = await env.DB.prepare("SELECT event_id FROM webhook_receipts WHERE event_id = ?").bind(eventId).first();
     if (receivedBefore) { summary.ignored += 1; continue; }
     let parsedRows = parseResultLines(event.message.text);
@@ -89,27 +107,16 @@ async function saveLineEvents(payload, env) {
     ).bind(drawDate, source.id, ...parsedRows.map((row) => row.roundNo)).all();
     const existingByRound = new Map(existing.results.map((row) => [Number(row.round_no), row]));
     const newRows = parsedRows.filter((row) => !existingByRound.has(row.roundNo));
-    const changedRows = parsedRows.filter((row) => {
-      const old = existingByRound.get(row.roundNo);
-      return old && (old.draw_time !== row.time || old.top_number !== row.top || old.bottom_number !== row.bottom);
-    });
-    const rowsToSave = [...newRows, ...changedRows];
+    const rowsToSave = newRows;
     const inserted = newRows.length;
-    const updated = changedRows.length;
+    const updated = 0;
     const ignored = parsedRows.length - rowsToSave.length;
 
     const statements = rowsToSave.map((parsed) => env.DB.prepare(
       `INSERT INTO group_daily_results
        (draw_date, source_id, round_no, draw_time, top_number, bottom_number, source_text, event_id, occurred_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(draw_date, source_id, round_no) DO UPDATE SET
-         draw_time = excluded.draw_time,
-         top_number = excluded.top_number,
-         bottom_number = excluded.bottom_number,
-         source_text = excluded.source_text,
-         event_id = excluded.event_id,
-         occurred_at = excluded.occurred_at,
-         updated_at = datetime('now')`
+       ON CONFLICT(draw_date, source_id, round_no) DO NOTHING`
     ).bind(drawDate, source.id, parsed.roundNo, parsed.time, parsed.top, parsed.bottom, event.message.text, eventId, occurredAt));
     statements.push(env.DB.prepare(
       `INSERT INTO webhook_receipts
@@ -265,4 +272,4 @@ export default {
   },
 };
 
-export { parseResult, parseResultLines, bangkokDate, verifyLineSignature, fallbackSourceName };
+export { parseResult, parseResultLines, bangkokDate, extractMessageDate, verifyLineSignature, fallbackSourceName };
