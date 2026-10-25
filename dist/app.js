@@ -11,6 +11,7 @@ function showPage(target, item) {
 }
 
 const realtimeDateInput = document.getElementById('realtimeDate');
+const templateDateInput = document.getElementById('templateDate');
 const realtimeSourceSelect = document.getElementById('realtimeSourceSelect');
 const historyRows = document.getElementById('historyRows');
 const dailyHistoryList = document.getElementById('dailyHistoryList');
@@ -295,6 +296,15 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     document.getElementById('realtimeFilled').textContent = payload.filled || 0;
     document.getElementById('realtimeGroupName').textContent = payload.source?.source_name || 'ยังไม่พบกลุ่ม';
     document.getElementById('realtimeDateLabel').textContent = payload.draw_date || date;
+    templateDateInput.value = payload.draw_date || date;
+    const lineDateStatus = document.getElementById('lineDateStatus');
+    if (payload.active_line_date) {
+      lineDateStatus.textContent = payload.active_line_date === (payload.draw_date || date)
+        ? `LINE กำลังบันทึกผลเข้าวันที่ ${formatThaiDate(payload.active_line_date)}`
+        : `กำลังดู ${formatThaiDate(payload.draw_date || date)} · LINE ตั้งรับผลไว้ที่ ${formatThaiDate(payload.active_line_date)}`;
+    } else {
+      lineDateStatus.textContent = `เลือกวันที่จากหน้าเว็บ หรือส่งวันที่ใน LINE เช่น 10/10/2026`;
+    }
     const latest = results.at(-1);
     document.getElementById('latestTop').textContent = latest?.top_number || '---';
     document.getElementById('latestBottom').textContent = latest?.bottom_number || '--';
@@ -355,6 +365,7 @@ async function loadDailyHistory() {
       button.innerHTML = `<span>${formatThaiDate(item.draw_date)}</span><strong>${item.total_records} รายการ</strong><small>${item.source_count} กลุ่ม · รอบล่าสุด ${String(item.latest_round || 0).padStart(3, '0')}</small>`;
       button.addEventListener('click', async () => {
         realtimeDateInput.value = item.draw_date;
+        templateDateInput.value = item.draw_date;
         await loadRealtimeSources({ preserve: false });
         await loadRealtimeResults();
         await loadDailyHistory();
@@ -374,6 +385,7 @@ function setRealtimeEditMode(enabled) {
   document.getElementById('cancelRealtime').hidden = !enabled;
   document.getElementById('deleteRealtime').hidden = enabled;
   realtimeDateInput.disabled = enabled;
+  templateDateInput.disabled = enabled;
   realtimeSourceSelect.disabled = enabled;
   renderRealtimeRows(realtimeResults);
 }
@@ -420,6 +432,7 @@ async function deleteRealtimeData() {
 }
 
 realtimeDateInput.value = thailandDate();
+templateDateInput.value = realtimeDateInput.value;
 renderRealtimeRows();
 document.getElementById('refreshRealtime').addEventListener('click', async () => { await loadRealtimeSources(); await loadRealtimeResults(); await loadDailyHistory(); });
 document.getElementById('editRealtime').addEventListener('click', () => setRealtimeEditMode(true));
@@ -439,7 +452,15 @@ document.getElementById('analysisLotGrid').addEventListener('click', (event) => 
 });
 document.getElementById('closeAnalysisDialog').addEventListener('click', () => document.getElementById('analysisDialog').close());
 document.getElementById('analysisDialog').addEventListener('click', (event) => { if (event.target.id === 'analysisDialog') event.target.close(); });
-realtimeDateInput.addEventListener('change', async () => { await loadRealtimeSources({ preserve: false }); await loadRealtimeResults(); await loadDailyHistory(); });
+async function changeRealtimeDate(value) {
+  realtimeDateInput.value = value;
+  templateDateInput.value = value;
+  await loadRealtimeSources({ preserve: false });
+  await loadRealtimeResults();
+  await loadDailyHistory();
+}
+realtimeDateInput.addEventListener('change', () => changeRealtimeDate(realtimeDateInput.value));
+templateDateInput.addEventListener('change', () => changeRealtimeDate(templateDateInput.value));
 realtimeSourceSelect.addEventListener('change', () => loadRealtimeResults());
 loadRealtimeSources().then(() => loadRealtimeResults()).catch(() => loadRealtimeResults());
 loadDailyHistory();

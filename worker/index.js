@@ -60,7 +60,7 @@ function bangkokDate(timestamp) {
   }).format(new Date(timestamp));
 }
 
-function extractMessageDate(text, fallbackTimestamp = Date.now()) {
+function extractExplicitMessageDate(text) {
   const slashDate = text.match(/(?:^|\D)(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:\D|$)/);
   if (slashDate) {
     let year = Number(slashDate[3]);
@@ -75,18 +75,22 @@ function extractMessageDate(text, fallbackTimestamp = Date.now()) {
   }
   const isoDate = text.match(/(?:^|\D)(20\d{2})-(\d{2})-(\d{2})(?:\D|$)/);
   if (isoDate) return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
-  return bangkokDate(fallbackTimestamp);
+  return null;
+}
+
+function extractMessageDate(text, fallbackTimestamp = Date.now()) {
+  return extractExplicitMessageDate(text) || bangkokDate(fallbackTimestamp);
 }
 
 async function saveLineEvents(payload, env) {
-  const summary = { accepted: 0, inserted: 0, updated: 0, ignored: 0, rejected: 0, sources: [] };
+  const summary = { accepted: 0, inserted: 0, updated: 0, ignored: 0, rejected: 0, date_changes: 0, sources: [] };
   for (const event of payload.events || []) {
     const eventId = event.webhookEventId || crypto.randomUUID();
     const source = await resolveLineSource(event.source || {}, env);
     const messageType = event.message?.type || event.type || "unknown";
     const rawText = event.message?.type === "text" ? event.message.text : null;
     const occurredAt = new Date(event.timestamp || Date.now()).toISOString();
-    const drawDate = extractMessageDate(rawText || "", event.timestamp || Date.now());
+    let drawDate = bangkokDate(event.timestamp || Date.now());
     const logStatement = (status, parsedRows = 0, insertedRows = 0, duplicateRows = 0) => env.DB.prepare(
       `INSERT INTO line_message_log
        (event_id, source_id, source_type, source_name, draw_date, message_id, sender_user_id, message_type,
@@ -110,6 +114,22 @@ async function saveLineEvents(payload, env) {
       summary.rejected += 1;
       continue;
     }
+    const explicitDrawDate = extractExplicitMessageDate(event.message.text);
+    if (explicitDrawDate) {
+      drawDate = explicitDrawDate;
+      await env.DB.prepare(
+        `INSERT INTO line_source_settings (source_id, active_draw_date, changed_by_event_id, updated_at)
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(source_id) DO UPDATE SET active_draw_date = excluded.active_draw_date,
+           changed_by_event_id = excluded.changed_by_event_id, updated_at = datetime('now')`
+      ).bind(source.id, drawDate, eventId).run();
+      summary.date_changes += 1;
+    } else {
+      const activeDate = await env.DB.prepare(
+        "SELECT active_draw_date FROM line_source_settings WHERE source_id = ?"
+      ).bind(source.id).first();
+      drawDate = activeDate?.active_draw_date || drawDate;
+    }
     let parsedRows = parseResultLines(event.message.text);
     if (!parsedRows.length) {
       const single = parseResult(event.message.text);
@@ -117,6 +137,11 @@ async function saveLineEvents(payload, env) {
     }
     parsedRows = [...new Map(parsedRows.map((row) => [row.roundNo, row])).values()];
     if (!parsedRows.length) {
+      if (explicitDrawDate) {
+        await logStatement("accepted").run();
+        if (!summary.sources.some((item) => item.id === source.id)) summary.sources.push(source);
+        continue;
+      }
       await logStatement("no_results").run();
       summary.ignored += 1;
       continue;
@@ -278,6 +303,9 @@ async function handleApi(request, env) {
     const source = await env.DB.prepare(
       `SELECT source_id, source_type, source_name, member_count, last_seen_at FROM line_sources WHERE source_id = ?`
     ).bind(selectedSource).first();
+    const activeDate = await env.DB.prepare(
+      "SELECT active_draw_date, updated_at FROM line_source_settings WHERE source_id = ?"
+    ).bind(selectedSource).first();
     const receipt = await env.DB.prepare(
       `SELECT received_rows, inserted_rows, updated_rows, ignored_rows, created_at
        FROM webhook_receipts WHERE draw_date = ? AND source_id = ? ORDER BY created_at DESC LIMIT 1`
@@ -290,7 +318,7 @@ async function handleApi(request, env) {
               COALESCE(SUM(duplicate_rows), 0) AS duplicate_rounds
        FROM line_message_log WHERE draw_date = ? AND source_id = ?`
     ).bind(latest, selectedSource).first();
-    return json({ ok: true, draw_date: latest, expected_rounds: 264, filled: results.length, missing: 264 - results.length, results, source, last_receipt: receipt || null, stats });
+    return json({ ok: true, draw_date: latest, active_line_date: activeDate?.active_draw_date || null, active_line_date_updated_at: activeDate?.updated_at || null, expected_rounds: 264, filled: results.length, missing: 264 - results.length, results, source, last_receipt: receipt || null, stats });
   }
 
   if (url.pathname === "/api/results" && request.method === "PUT") {
