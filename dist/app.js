@@ -421,8 +421,8 @@ async function deleteSelectedRealtimeRows() {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-delete-key': deleteKey },
     body: JSON.stringify({ draw_date: realtimeDateInput.value, source_id: sourceId, rounds }),
   });
-  const result = await response.json();
-  if (!response.ok) { if (response.status === 401) sessionStorage.removeItem('yiki-delete-key'); alert(`ลบไม่สำเร็จ: ${result.error || response.status}`); return; }
+  const result = await readApiResponse(response);
+  if (!response.ok) { alert(`ลบไม่สำเร็จ: ${result.error || `HTTP ${response.status}`}`); return; }
   setRealtimeEditMode(false);
   await loadRealtimeSources({ preserve: true });
   await loadRealtimeResults();
@@ -431,12 +431,15 @@ async function deleteSelectedRealtimeRows() {
 }
 
 function getDeleteKey() {
-  const saved = sessionStorage.getItem('yiki-delete-key');
-  if (saved) return saved;
   const entered = prompt('กรอกรหัสลบข้อมูล D1\n(รหัสที่ตั้งไว้ใน Cloudflare Secret: ADMIN_DELETE_KEY)');
-  if (!entered) return '';
-  sessionStorage.setItem('yiki-delete-key', entered);
-  return entered;
+  return entered ? entered.trim() : '';
+}
+
+async function readApiResponse(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try { return JSON.parse(text); }
+  catch { return { error: text.slice(0, 300) }; }
 }
 
 async function saveRealtimeTable() {
@@ -474,8 +477,8 @@ async function deleteRealtimeData() {
   if (!confirm(`ลบผลทั้งหมดของวันที่ ${realtimeDateInput.value} จากตารางนี้ใช่ไหม? ประวัติการลบจะยังถูกเก็บไว้ใน D1`)) return;
   const query = new URLSearchParams({ date: realtimeDateInput.value, source_id: sourceId });
   const response = await fetch(`/api/results?${query}`, { method: 'DELETE', headers: { 'x-admin-delete-key': deleteKey } });
-  const result = await response.json();
-  if (!response.ok) { if (response.status === 401) sessionStorage.removeItem('yiki-delete-key'); alert(`ลบไม่สำเร็จ: ${result.error || response.status}`); return; }
+  const result = await readApiResponse(response);
+  if (!response.ok) { alert(`ลบไม่สำเร็จ: ${result.error || `HTTP ${response.status}`}`); return; }
   await loadRealtimeSources({ preserve: false });
   await loadRealtimeResults();
   await loadDailyHistory();
