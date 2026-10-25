@@ -12,7 +12,7 @@
     {
       "binding": "DB",
       "database_name": "yiki-results",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "d4747338-05a9-4909-bed9-98fbb5db98ea",
       "migrations_dir": "migrations"
     }
   ]
