@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "yiki-analytics",
+  "name": "yiki-online",
   "main": "worker/index.js",
   "compatibility_date": "2026-10-24",
   "assets": {

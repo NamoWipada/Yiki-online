@@ -55,13 +55,13 @@ npm run dev
 npm run deploy
 ```
 
-จะได้ URL ลักษณะ `https://yiki-analytics.<ชื่อบัญชี>.workers.dev`
+จะได้ URL ลักษณะ `https://yiki-online.<ชื่อบัญชี>.workers.dev`
 
 ## 6. เชื่อม LINE
 
 1. เข้า LINE Developers และเลือก Messaging API channel
 2. ที่ Messaging API > Webhook URL ใส่
-   `https://yiki-analytics.<ชื่อบัญชี>.workers.dev/api/line/webhook`
+   `https://yiki-online.<ชื่อบัญชี>.workers.dev/api/line/webhook`
 3. กด Verify แล้วเปิด Use webhook
 4. เชิญ Official Account เข้า LINE Group ที่ส่งผล
 5. เปิด Allow bot to join group chats ใน Messaging API settings
