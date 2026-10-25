@@ -247,7 +247,8 @@ async function handleApi(request, env) {
 
   if (url.pathname === "/api/result-dates" && request.method === "GET") {
     const { results } = await env.DB.prepare(
-      `SELECT draw_date, COUNT(*) AS filled, MAX(round_no) AS latest_round
+      `SELECT draw_date, COUNT(*) AS total_records, COUNT(DISTINCT source_id) AS source_count,
+              MAX(round_no) AS latest_round, MAX(updated_at) AS last_updated
        FROM group_daily_results GROUP BY draw_date ORDER BY draw_date DESC LIMIT 90`
     ).all();
     return json({ ok: true, dates: results });

@@ -12,6 +12,7 @@ function showPage(target, item) {
 const realtimeDateInput = document.getElementById('realtimeDate');
 const realtimeSourceSelect = document.getElementById('realtimeSourceSelect');
 const historyRows = document.getElementById('historyRows');
+const dailyHistoryList = document.getElementById('dailyHistoryList');
 
 function thailandDate() {
   const parts = new Intl.DateTimeFormat('en', {
@@ -90,12 +91,49 @@ async function loadRealtimeSources({ preserve = true } = {}) {
   if (previous && sources.some((source) => source.source_id === previous)) realtimeSourceSelect.value = previous;
 }
 
+function formatThaiDate(value) {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00+07:00`));
+}
+
+async function loadDailyHistory() {
+  try {
+    const response = await fetch('/api/result-dates', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const dates = payload.dates || [];
+    document.getElementById('historyDayCount').textContent = `${dates.length} วันที่บันทึกไว้`;
+    dailyHistoryList.innerHTML = '';
+    if (!dates.length) {
+      dailyHistoryList.innerHTML = '<p class="history-empty">ยังไม่มีข้อมูลย้อนหลัง เมื่อแชร์ผลเข้ากลุ่ม Test API ระบบจะสร้างประวัติของวันนั้นอัตโนมัติ</p>';
+      return;
+    }
+    dates.forEach((item) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `history-day${item.draw_date === realtimeDateInput.value ? ' active' : ''}`;
+      button.innerHTML = `<span>${formatThaiDate(item.draw_date)}</span><strong>${item.total_records} รายการ</strong><small>${item.source_count} กลุ่ม · รอบล่าสุด ${String(item.latest_round || 0).padStart(3, '0')}</small>`;
+      button.addEventListener('click', async () => {
+        realtimeDateInput.value = item.draw_date;
+        await loadRealtimeSources({ preserve: false });
+        await loadRealtimeResults();
+        await loadDailyHistory();
+        document.querySelector('.realtime-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      dailyHistoryList.appendChild(button);
+    });
+  } catch (error) {
+    dailyHistoryList.innerHTML = `<p class="history-empty">โหลดประวัติไม่ได้ (${error.message})</p>`;
+  }
+}
+
 realtimeDateInput.value = thailandDate();
 renderRealtimeRows();
-document.getElementById('refreshRealtime').addEventListener('click', async () => { await loadRealtimeSources(); await loadRealtimeResults(); });
-realtimeDateInput.addEventListener('change', async () => { await loadRealtimeSources({ preserve: false }); await loadRealtimeResults(); });
+document.getElementById('refreshRealtime').addEventListener('click', async () => { await loadRealtimeSources(); await loadRealtimeResults(); await loadDailyHistory(); });
+realtimeDateInput.addEventListener('change', async () => { await loadRealtimeSources({ preserve: false }); await loadRealtimeResults(); await loadDailyHistory(); });
 realtimeSourceSelect.addEventListener('change', () => loadRealtimeResults());
 loadRealtimeSources().then(() => loadRealtimeResults()).catch(() => loadRealtimeResults());
+loadDailyHistory();
 
 const pairMap = { '0': '2', '1': '7', '2': '0', '3': '8', '4': '5', '5': '4', '6': '9', '7': '1', '8': '3', '9': '6' };
 const sequenceBases = ['089', '567', '243', '190', '789'];
