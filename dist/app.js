@@ -32,22 +32,28 @@ function renderRealtimeRows(results = []) {
   const byRound = new Map(results.map((item) => [Number(item.round_no), item]));
   historyRows.innerHTML = Array.from({ length: EXPECTED_ROUNDS }, (_, index) => {
     const round = index + 1;
+    const lot = Math.ceil(round / 4);
+    const lotStart = (round - 1) % 4 === 0;
+    const lotEnd = round % 4 === 0;
     const item = byRound.get(round);
-    return `<tr class="${item ? 'round-received' : 'round-waiting'}">
-      <td><span class="round-no">${String(round).padStart(3, '0')}</span></td>
+    return `<tr class="${item ? 'round-received' : 'round-waiting'} lot-${lot % 2 ? 'odd' : 'even'}${lotStart ? ' lot-start' : ''}${lotEnd ? ' lot-end' : ''}">
+      <td><span class="round-no">${lotStart ? `<small>ล็อต ${String(lot).padStart(2, '0')}</small>` : ''}${String(round).padStart(3, '0')}</span></td>
       <td>${realtimeEditing ? `<input class="edit-time" data-round="${round}" value="${item?.draw_time || ''}" inputmode="numeric" placeholder="00:00" />` : (item?.draw_time || '—')}</td>
       <td class="mono realtime-number">${realtimeEditing ? `<input class="edit-top" data-round="${round}" value="${item?.top_number || ''}" inputmode="numeric" maxlength="3" placeholder="000" />` : (item?.top_number || '— — —')}</td>
       <td class="mono realtime-number">${realtimeEditing ? `<input class="edit-bottom" data-round="${round}" value="${item?.bottom_number || ''}" inputmode="numeric" maxlength="2" placeholder="00" />` : (item?.bottom_number || '— —')}</td>
       <td>${realtimeEditing ? '<span class="editing-badge">แก้ไขได้</span>' : (item ? '<span class="verified">✓ รับข้อมูลแล้ว</span>' : '<span class="waiting">รอผล</span>')}</td>
     </tr>`;
   }).join('');
-  const blockRanges = [[1, 53], [54, 106], [107, 159], [160, 212], [213, 264]];
+  const blockRanges = [[1, 44], [45, 88], [89, 132], [133, 176], [177, 220], [221, 264]];
   roundTemplate.innerHTML = blockRanges.map(([start, end]) => `<section class="round-template-block">
-    <header><span>รอบ</span><span>บน</span><span>ล่าง</span></header>
+    <header><span>ล็อต / รอบ</span><span>บน</span><span>ล่าง</span></header>
     ${Array.from({ length: end - start + 1 }, (_, offset) => {
       const round = start + offset;
+      const lot = Math.ceil(round / 4);
+      const lotStart = (round - 1) % 4 === 0;
+      const lotEnd = round % 4 === 0;
       const item = byRound.get(round);
-      return `<div class="template-row${item ? ' has-result' : ''}"><b>${round}</b><strong>${item?.top_number || ''}</strong><strong>${item?.bottom_number || ''}</strong></div>`;
+      return `<div class="template-row lot-${lot % 2 ? 'odd' : 'even'}${lotStart ? ' lot-start' : ''}${lotEnd ? ' lot-end' : ''}${item ? ' has-result' : ''}"><b>${lotStart ? `<small>L${String(lot).padStart(2, '0')}</small>` : ''}<span>${round}</span></b><strong>${item?.top_number || ''}</strong><strong>${item?.bottom_number || ''}</strong></div>`;
     }).join('')}
   </section>`).join('');
   document.getElementById('templateFilled').textContent = results.length;
