@@ -11,7 +11,8 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css?v=10" />
   <link rel="stylesheet" href="./enhancements.css?v=11" />
-  <link rel="stylesheet" href="./realtime-template.css?v=6" />
+  <link rel="stylesheet" href="./realtime-template.css?v=9" />
+  <link rel="stylesheet" href="./latest-prediction.css?v=1" />
 </head>
 <body>
   <div class="shell">
@@ -94,18 +95,19 @@
       <section class="page" id="analysis">
         <div class="analysis-hero"><div><p class="eyebrow">LIVE TECHNIQUE ANALYSIS</p><h2>สรุปการวิเคราะห์ตามล็อต</h2><p>ดึงผลจาก LINE/D1 แบ่งล็อตละ 4 รอบ และติดตามผลของทุกเทคนิคไม่เกิน 6 รอบ หากครบกำหนดแล้วยังไม่พบจะตัดจบเป็นไม่เข้าเทคนิค</p></div><button id="refreshAnalysis" type="button">คำนวณข้อมูลล่าสุด ↻</button></div>
         <div class="analysis-summary-strip"><div><span>วันที่วิเคราะห์</span><strong id="analysisDate">—</strong></div><div><span>ข้อมูลทั้งหมด</span><strong id="analysisFilled">0 / 264</strong></div><div><span>ล็อตที่เข้าเทคนิค</span><strong id="analysisTriggered">0</strong></div><div><span>ล็อตที่ถูกเทคนิค</span><strong id="analysisPassed">0</strong></div></div>
+        <section class="latest-prediction-board" id="latestPredictionBoard"><div class="latest-prediction-empty">กำลังคำนวณคำทำนายจาก 6 รอบล่าสุด</div></section>
         <details class="technique-switcher" open>
           <summary><span><b>เปิด–ปิดเทคนิคที่ใช้วิเคราะห์</b><small>ปิดแล้วจะไม่สร้างคำทำนายและไม่นับรอบติดตามของเทคนิคนั้น</small></span><strong id="enabledTechniqueCount">5 / 5 เปิดใช้งาน</strong></summary>
           <div class="technique-switch-grid">
             <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="jeeb" checked /><i></i><span><b>จีบเรียง → จปล 12 คู่</b><small>แปลง 3 หลักเป็นคู่ 2 หลัก</small></span></label>
             <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="sibling" checked /><i></i><span><b>พี่น้อง → เบิ้ล/จปร.</b><small>เทียบหน่วยบนกับสิบล่าง</small></span></label>
-            <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="same" checked /><i></i><span><b>รูซ้ำ → พี่น้อง</b><small>เลขตำแหน่งเทียบเป็นตัวเดียวกัน</small></span></label>
+            <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="same" checked /><i></i><span><b>พี่น้อง → รูซ้ำ</b><small>เลขตำแหน่งเทียบเป็นตัวเดียวกัน</small></span></label>
             <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="hunt" checked /><i></i><span><b>ล่าเลข 43/48/53/58</b><small>ตรวจสัญญาณ 33, 88, 38, 83</small></span></label>
             <label class="technique-switch-card"><input type="checkbox" data-technique-toggle="running" checked /><i></i><span><b>เลขวิ่งจากรอบแรก</b><small>หน่วยบนต่อเลขล่าง</small></span></label>
           </div>
           <div class="technique-switch-actions"><button id="enableAllTechniques" type="button">เปิดทั้งหมด</button><button id="disableAllTechniques" type="button">ปิดทั้งหมด</button></div>
         </details>
-        <div class="analysis-legend"><span><i class="signal"></i> สีสัญญาณ: ตำแหน่งที่เข้าเทคนิค</span><span><i class="success"></i> สีผลลัพธ์: เลขที่ทำนายถูก (สลับตำแหน่งได้)</span></div>
+        <div class="analysis-legend"><span><i class="signal"></i> สีสัญญาณ: ตำแหน่งที่เข้าเทคนิค</span><span><i class="success"></i> สีผลลัพธ์: เลขที่ทำนายถูก (สลับตำแหน่งได้)</span><span><i class="dual"></i> ส้ม–เขียว: เป็นทั้งสัญญาณและผลลัพธ์</span></div>
         <section class="analysis-lot-grid analysis-table-shell" id="analysisLotGrid"><p class="analysis-empty">กำลังรอข้อมูลจากหน้าเรียลไทม์</p></section>
       </section>
 
@@ -152,24 +154,25 @@
       </section>
 
       <section class="page" id="guide">
-        <div class="calc-intro"><div><p class="eyebrow">TECHNIQUE LIBRARY</p><h2>คู่มือรวมเทคนิค</h2><p>รวมกติกา ตำแหน่งที่ต้องดู และตัวเลขเป้าหมายทั้งหมดไว้ในหน้าเดียวสำหรับเปิดเช็กระหว่างคีย์ผล</p></div><span class="draft ready">9 เทคนิค</span></div>
+        <div class="calc-intro"><div><p class="eyebrow">TECHNIQUE LIBRARY</p><h2>คู่มือรวมเทคนิค</h2><p>รวมเงื่อนไขเข้า วิธีสร้างชุด การเคลื่อนสถานะตั้งแต่เริ่มติดตามจนตัดจบ และวิธีตรวจผลของทุกเทคนิค</p></div><span class="draft ready">9 เทคนิค</span></div>
+        <section class="guide-flow"><header><div><p class="eyebrow">TRACKING LIFECYCLE</p><h3>การเคลื่อนสถานะของคำทำนาย</h3></div><span>ใช้หลักเดียวกันทุกเทคนิค</span></header><div class="guide-flow-steps"><article><b>1</b><strong>พบสัญญาณ</strong><p>อ่านผลรอบต้นทางและสร้างชุดเป้าหมาย สีส้มหมายถึงตำแหน่งที่ทำให้เข้าเงื่อนไข</p></article><article><b>2</b><strong>เริ่มนับรอบถัดไป</strong><p>รอบต้นทางไม่นับเป็นรอบติดตาม เริ่มตรวจที่รอบถัดไปเป็น 1/6 จนถึง 6/6</p></article><article><b>3</b><strong>ตรวจบนและล่าง</strong><p>เทียบสองตัวท้ายของเลขบนและเลขล่าง หรือเลข 3 ตัวตามชนิดเทคนิค โดยสลับตำแหน่งได้</p></article><article><b>4</b><strong>ถูกแล้วหยุด</strong><p>เมื่อพบครั้งแรกให้สีเขียว บันทึกรอบที่ถูกและหยุดคำทำนายนั้นทันที ไม่ตรวจรอบที่เหลือ</p></article><article><b>5</b><strong>ครบ 6 รอบตัดจบ</strong><p>ถ้ารอบ 1/6–6/6 ไม่พบ ถือว่าเทคนิคนั้นไม่ถูก/ไม่เข้า แล้วไม่นำไปนับต่อ</p></article></div><div class="guide-color-note"><i class="orange"></i><span><b>ส้ม</b> จุดกำเนิดสัญญาณ</span><i class="green"></i><span><b>เขียว</b> ผลลัพธ์ที่ถูก</span><i class="dual"></i><span><b>ส้ม–เขียว</b> ตำแหน่งเดียวกันเป็นทั้งสัญญาณใหม่และผลของคำทำนายเดิม</span></div></section>
         <section class="technique-grid">
           <div class="color-legend"><b>สีผลวิเคราะห์</b><i class="lg-jeeb">จีบเรียง</i><i class="lg-jpl">จปล</i><i class="lg-sibling">พี่น้อง</i><i class="lg-same">รูซ้ำ</i><i class="lg-double">เบิ้ล</i><i class="lg-jpr">จปร.</i></div>
-          <article class="tech-card jeeb"><span>01 · จีบเรียง</span><h3>ตรวจสมาชิกโดยไม่สนลำดับ</h3><p>เลข 3 ตัวถือว่าเป็นชุดเดียวกันแม้สลับตำแหน่ง เช่น <b>561 = 165 = 615</b> เมื่อพบให้ไฮไลต์กลุ่มที่ตรง</p><div class="tech-example">กลุ่มตั้งต้น: 089 · 567 · 243 · 190 · 789</div></article>
-          <article class="tech-card jpl"><span>02 · จีบเรียง → จปล 12 คู่</span><h3>แปลงเลข 3 หลักเป็นเลข 2 หลัก</h3><p>จับคู่หลัก 1–2, 1–3 และ 2–3 แล้วสลับแต่ละหลักตามคู่ จปล <b>0↔2, 1↔7, 3↔8, 4↔5, 6↔9</b></p><div class="tech-example">243 → 24,25,04,05 / 23,28,03,08 / 43,48,53,58</div></article>
-          <article class="tech-card jpl"><span>03 · วิธีตรวจผล</span><h3>ตรวจสองตัวท้ายบนและเลขล่าง</h3><p>นำคู่ทำนายทั้ง 12 ตัวไปเทียบกับหลักสิบ–หน่วยของเลขบนและเลขล่างภายใน 6 รอบ โดยกลับตัวได้</p><div class="tech-example">ทำนาย 24 → ผล 24 หรือ 42 ถือว่าถูกเทคนิค</div></article>
-          <article class="tech-card sibling"><span>04 · RULE เทคนิค 1</span><h3>สัญญาณพี่น้อง</h3><div class="rule-position"><b>บน 50<mark>6</mark></b><i>เทียบ</i><b>ล่าง <mark>5</mark>8</b></div><p>เลขห่างกัน 1 ขั้น รวมคู่ 0–9 จากนั้นติดตามไม่เกิน 6 รอบเพื่อหา <b>เลขเบิ้ลหรือ จปร.</b></p></article>
-          <article class="tech-card same"><span>05 · RULE เทคนิค 2</span><h3>สัญญาณรูซ้ำ</h3><div class="rule-position"><b>บน 62<mark>7</mark></b><i>เทียบ</i><b>ล่าง <mark>7</mark>7</b></div><p>เลขตำแหน่งที่เทียบเป็นตัวเดียวกัน จากนั้นติดตามไม่เกิน 6 รอบเพื่อหา <b>พี่น้องในสองตัวท้ายบนหรือล่าง</b></p></article>
+          <article class="tech-card jeeb"><span>01 · จีบเรียง</span><h3>ตรวจสมาชิกโดยไม่สนลำดับ</h3><p>เลข 3 ตัวถือว่าเป็นชุดเดียวกันแม้สลับตำแหน่ง เช่น <b>392 = 239 = 293</b> ระบบจึงไฮไลต์สมาชิก 239 ในกลุ่มเป็นสีส้มเมื่อผลจริงคือ 392</p><div class="tech-example">กลุ่มตั้งต้น: 089 · 567 · 243 · 190 · 789</div><details><summary>รายละเอียดการเข้า–ออก</summary><p><b>เข้า:</b> เรียงตัวเลขจากน้อยไปมากแล้วตรงกับสมาชิกในกลุ่มใดกลุ่มหนึ่ง</p><p><b>ออก:</b> สร้างคำทำนาย จปล 12 คู่จากเลขจริงของรอบนั้น แล้วส่งเข้าสถานะติดตาม 1/6–6/6</p><p><b>ไม่เข้า:</b> ไม่มีชุดสมาชิกตรงกัน จะไม่สร้างคำทำนายจีบเรียงในรอบนั้น</p></details></article>
+          <article class="tech-card jpl"><span>02 · จีบเรียง → จปล 12 คู่</span><h3>แปลงเลข 3 หลักเป็นเลข 2 หลัก</h3><p>จับคู่หลัก 1–2, 1–3 และ 2–3 แล้วสลับแต่ละหลักตามคู่ จปล <b>0↔2, 1↔7, 3↔8, 4↔5, 6↔9</b></p><div class="tech-example">243 → 24,25,04,05 / 23,28,03,08 / 43,48,53,58</div><details><summary>อ่าน 3 แถวอย่างไร</summary><p><b>แถว 1:</b> คู่หลักที่ 1–2 และคู่แปลง จปล</p><p><b>แถว 2:</b> คู่หลักที่ 1–3 และคู่แปลง จปล</p><p><b>แถว 3:</b> คู่หลักที่ 2–3 และคู่แปลง จปล</p><p>แต่ละแถวมี 4 คู่ รวมทั้งหมด 12 คู่ และทุกคู่ตรวจแบบกลับตัวได้</p></details></article>
+          <article class="tech-card jpl"><span>03 · วิธีตรวจผล</span><h3>ตรวจสองตัวท้ายบนและเลขล่าง</h3><p>นำคู่ทำนายทั้ง 12 ตัวไปเทียบกับหลักสิบ–หน่วยของเลขบนและเลขล่างใน 6 รอบถัดไป โดยกลับตัวได้</p><div class="tech-example">ทำนาย 24 → ผลบน x24 / x42 หรือผลล่าง 24 / 42 ถือว่าถูก</div><details><summary>ลำดับสถานะ</summary><p>ถ้าถูกในรอบ 2/6 ระบบบันทึกว่า “ถูกเทคนิคจากรอบต้นทาง · ตาม 2/6” แล้วหยุดทันที หากไม่พบจนจบ 6/6 จึงตัดเป็นไม่ถูก</p></details></article>
+          <article class="tech-card sibling"><span>04 · RULE เทคนิค 1</span><h3>สัญญาณพี่น้อง</h3><div class="rule-position"><b>บน 50<mark>6</mark></b><i>เทียบ</i><b>ล่าง <mark>5</mark>8</b></div><p>เปรียบเทียบ <b>หน่วยบน</b> กับ <b>สิบล่าง</b> ถ้าห่างกัน 1 ขั้น รวมคู่ปลายวง 0–9 ให้สร้างเป้าหมายเลขเบิ้ลและ จปร.</p><details><summary>รายละเอียดการติดตาม</summary><p><b>เข้า:</b> 6–5, 5–4, 3–2, 1–0 หรือ 0–9 เป็นต้น</p><p><b>ตรวจ:</b> หาเลขเบิ้ล/จปร. ในสองตัวท้ายบนหรือเลขล่างของรอบ 1/6–6/6</p><p><b>จบ:</b> พบครั้งแรกหยุด หรือครบ 6 รอบแล้วตัดเป็นไม่เข้า</p></details></article>
+          <article class="tech-card same"><span>05 · RULE เทคนิค 2</span><h3>สัญญาณรูซ้ำ</h3><div class="rule-position"><b>บน 62<mark>7</mark></b><i>เทียบ</i><b>ล่าง <mark>7</mark>7</b></div><p>หน่วยบนและสิบล่างเป็นเลขเดียวกัน ให้สร้างเป้าหมายเลขพี่น้องสำหรับ 6 รอบถัดไป</p><details><summary>รายละเอียดการติดตาม</summary><p><b>เข้า:</b> 7–7, 5–5, 0–0 เป็นต้น</p><p><b>ตรวจ:</b> หาคู่พี่น้อง 01/10, 12/21 … 89/98 และ 90/09 ในสองตัวท้ายบนหรือเลขล่าง</p><p><b>จบ:</b> พบครั้งแรกหยุด หรือครบ 6 รอบแล้วตัดเป็นไม่เข้า</p></details></article>
           <article class="tech-card target"><span>06 · เลขเป้าหมาย RULE</span><h3>เบิ้ลและ จปร.</h3><p><b>เบิ้ล:</b> 00, 11, 22, 33, 44, 55, 66, 77, 88, 99</p><p><b>จปร.:</b> 17/71, 02/20, 38/83, 45/54, 69/96</p><div class="tech-example">ติดตามสูงสุด 6 รอบ · เกินกำหนดถือว่าไม่ถูกและไม่เข้าเทคนิค</div></article>
-          <article class="tech-card hunt"><span>07 · สัญญาณล่าเลขจากเลขเบิ้ล</span><h3>พบ 33, 88, 38 หรือ 83</h3><p>เมื่อพบชุดสัญญาณ ให้แนะนำเลขคู่ <b>43, 48, 53, 58</b> แล้วลากเป็นเลข 3 ตัว</p><div class="tech-example">430–439 · 480–489 · 530–539 · 580–589<br>ติดตามไม่เกิน 6 รอบ · พบแล้วหยุด</div></article>
-          <article class="tech-card running"><span>08 · จับเลขวิ่ง 3 ตัว</span><h3>หน่วยบน + สองตัวล่าง</h3><p>ใช้ผล <b>รอบแรกของล็อต</b> เช่น 129–08 → เลขตั้งต้น 908 แล้วสลับคู่ จปล ครบ 8 ชุด</p><div class="tech-example">908, 903, 928, 923, 608, 603, 628, 623<br>ติดตาม 8–10 รอบ</div></article>
-          <article class="tech-card triple"><span>09 · สัญญาณเลขตอง</span><h3>จับคู่รอบก่อน–หลังเลขตอง</h3><p>เมื่อพบเลขตอง เช่น <b>333</b> ให้เก็บสองตัวท้ายบนและเลขล่างจากรอบก่อนกับรอบถัดไป แล้วขยายเป็นช่วงเลข 3 ตัว</p><div class="tech-example">64 → 640–649, 650–659, 940–949, 950–959<br>09 → 090–099, 060–069, 260–269, 290–299</div></article>
+          <article class="tech-card hunt"><span>07 · สัญญาณล่าเลขจากเลขเบิ้ล</span><h3>พบ 33, 88, 38 หรือ 83</h3><p>เมื่อพบคู่สัญญาณในเลขบนหรือเลขล่าง ให้สร้างเป้าหมาย <b>43, 48, 53, 58</b> และกลับตัวได้</p><div class="tech-example">ตรวจเป้าหมาย 43/34 · 48/84 · 53/35 · 58/85 ภายใน 6 รอบ</div><details><summary>การเข้า–ออก</summary><p>รอบที่พบสัญญาณเป็นรอบต้นทาง จากนั้นตรวจสองตัวท้ายบนและเลขล่าง 6 รอบ พบครั้งแรกหยุด; ไม่พบครบ 6 รอบตัดจบ</p></details></article>
+          <article class="tech-card running"><span>08 · จับเลขวิ่ง 3 ตัว</span><h3>หน่วยบน + สองตัวล่าง</h3><p>ใช้ผล <b>รอบแรกของล็อต</b> เช่น 129–08 → เลขตั้งต้น 908 แล้วสลับคู่ จปล ครบ 8 ชุด</p><div class="tech-example">908, 903, 928, 923, 608, 603, 628, 623</div><details><summary>การเข้า–ออก</summary><p><b>เข้า:</b> สร้างเฉพาะรอบแรกของแต่ละล็อต 4 รอบ</p><p><b>ตรวจ:</b> เทียบเลข 3 ตัวแบบสลับตำแหน่งได้ใน 6 รอบถัดไป</p><p><b>จบ:</b> ถูกครั้งแรกหยุด หรือครบ 6 รอบแล้วตัดจบ</p></details></article>
+          <article class="tech-card triple"><span>09 · สัญญาณเลขตอง</span><h3>จับคู่รอบก่อน–หลังเลขตอง</h3><p>เมื่อพบเลขตอง เช่น <b>333</b> ให้เก็บสองตัวท้ายบนและเลขล่างจากรอบก่อนกับรอบถัดไป แล้วขยายเป็นช่วงเลข 3 ตัว</p><div class="tech-example">64 → 640–649, 650–659, 940–949, 950–959<br>09 → 090–099, 060–069, 260–269, 290–299</div><details><summary>ข้อสังเกตการใช้</summary><p>ต้องมีข้อมูลรอบก่อนและรอบหลังเลขตองครบจึงสร้างชุดได้ ใช้เป็นการวิเคราะห์เสริมในตาราง 264 รอบ และใช้เพดานติดตามไม่เกิน 6 รอบเช่นเดียวกัน</p></details></article>
         </section>
       </section>
     </main>
   </div>
   <dialog class="analysis-dialog" id="analysisDialog"><div class="dialog-head"><div><p class="eyebrow">ANALYSIS DETAIL</p><h3 id="analysisDialogTitle">รายละเอียดการวิเคราะห์</h3></div><button id="closeAnalysisDialog" type="button" aria-label="ปิด">×</button></div><div id="analysisDialogBody"></div></dialog>
   <script src="./mock-264.js?v=10"></script>
-  <script src="./app.js?v=19"></script>
+  <script src="./app.js?v=23"></script>
 </body>
 </html>

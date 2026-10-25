@@ -95,6 +95,9 @@ function renderIntakeStats(stats = {}) {
 function permutationKey(value) { return [...String(value)].sort().join(''); }
 function matchesAnyPermutation(value, targets = []) { return targets.some((target) => permutationKey(value) === permutationKey(target)); }
 function analysisDigits(value, kinds = []) { return [...value].map((digit, index) => `<i class="${kinds[index] || ''}">${digit}</i>`).join(''); }
+function mergeDigitKinds(signalKinds, hitKinds) {
+  return signalKinds.map((signalKind, index) => [signalKind, hitKinds[index]].filter(Boolean).join(' '));
+}
 function analysisSignalPositions(item, signals) {
   const top = ['', '', ''], bottom = ['', ''];
   signals.forEach((signal) => {
@@ -121,7 +124,7 @@ function predictionsFromRound(item, roundInLot) {
   }
   const rule = ruleTrigger(top, bottom);
   if (rule.trick1) predictions.push({ name: 'พี่น้อง → เบิ้ล/จปร.', tone: 'sibling', top: [], bottom: [...doubleNumbers, ...jprNumbers], note: `หน่วยบน ${top[2]} เทียบสิบล่าง ${bottom[0]}` });
-  if (rule.trick2) predictions.push({ name: 'รูซ้ำ → พี่น้อง', tone: 'same', top: [], bottom: ['01','10','12','21','23','32','34','43','45','54','56','65','67','76','78','87','89','98','90','09'], note: `พบเลขซ้ำ ${top[2]}–${bottom[0]}` });
+  if (rule.trick2) predictions.push({ name: 'พี่น้อง → รูซ้ำ', tone: 'same', top: [], bottom: ['01','10','12','21','23','32','34','43','45','54','56','65','67','76','78','87','89','98','90','09'], note: `พบเลขซ้ำ ${top[2]}–${bottom[0]}` });
   const hunt = huntSignalPairs.find((pair) => top.includes(pair) || bottom.includes(pair));
   if (hunt && isTechniqueEnabled('hunt')) predictions.push({ name: 'ล่าเลข 43/48/53/58', tone: 'hunt', top: [], bottom: huntTargetPairs, note: `พบสัญญาณ ${hunt}` });
   if (roundInLot === 1 && isTechniqueEnabled('running')) {
@@ -144,7 +147,7 @@ function predictionDetail(prediction) {
   const rowList = prediction.rows?.length ? `<div class="dialog-pair-rows">${prediction.rows.map((row, index) => `<div><strong>แถว ${index + 1}</strong>${row.map((value) => `<i>${value}</i>`).join('')}</div>`).join('')}</div>` : '';
   const groupList = prediction.tone === 'jeeb' ? `<section class="dialog-jeeb-groups"><header><b>กลุ่มจีบเรียงที่ใช้ตรวจ</b><span>สีเขียวคือกลุ่มที่เข้า · สีส้มคือเลข ${prediction.sourceTop}</span></header><div>${sequenceBases.map((base, index) => {
     const variants = expandJeeb(base), matched = prediction.groups?.some((group) => group.index === index);
-    return `<article class="${matched ? 'matched' : ''}"><b>กลุ่ม ${index + 1} · ${base}</b><div>${variants.map((value) => `<i class="${value === prediction.sourceTop ? 'exact' : ''}">${value}</i>`).join('')}</div></article>`;
+    return `<article class="${matched ? 'matched' : ''}"><b>กลุ่ม ${index + 1} · ${base}</b><div>${variants.map((value) => `<i class="${permutationKey(value) === permutationKey(prediction.sourceTop) ? 'exact' : ''}">${value}</i>`).join('')}</div></article>`;
   }).join('')}</div></section>` : '';
   return `<article class="dialog-tech-card ${prediction.tone}"><header><b>${prediction.name}</b><span>เริ่มจากรอบ ${String(prediction.sourceRound).padStart(3, '0')}</span></header><p><strong>เหตุผลที่เข้าเทคนิค:</strong> ${prediction.note}</p>${groupList}<p><strong>วิธีคำนวณ:</strong> ${steps[prediction.tone] || 'ตรวจตามเงื่อนไขของเทคนิค'}</p>${rowList}<div class="dialog-target-grid"><div><small>ชุดเป้าหมาย 3 หลัก</small><b>${topTargets}</b></div><div><small>ชุดเป้าหมาย 2 หลัก (กลับตัวได้)</small><b>${bottomTargets}</b></div></div></article>`;
 }
@@ -164,6 +167,29 @@ function predictionTimeline(prediction, byRound) {
     return `<div class="prediction-check ${className}"><b>รอบ ${String(round).padStart(3, '0')} <small>${offset + 1}/6</small></b><span>${item ? `บน ${item.top_number} · ล่าง ${item.bottom_number}` : 'ยังไม่มีผล'}</span><strong>${status}</strong></div>`;
   }).join('');
   return `<section class="prediction-timeline"><header><div><b>${prediction.name}</b><small>คำนวณจากรอบ ${String(prediction.sourceRound).padStart(3, '0')}</small></div><span>${hitCheck ? `✓ ถูกที่รอบ ${String(hitCheck.round).padStart(3, '0')}` : 'ติดตามไม่เกิน 6 รอบ'}</span></header>${rows}</section>`;
+}
+
+function renderLatestPredictionBoard(rows) {
+  const board = document.getElementById('latestPredictionBoard');
+  if (!board) return;
+  const latest = rows.filter((row) => row.item).sort((a, b) => b.round - a.round).slice(0, 6);
+  if (!latest.length) {
+    board.innerHTML = '<div class="latest-prediction-empty">ยังไม่มีผลสำหรับสร้างคำทำนาย</div>';
+    return;
+  }
+  const signals = latest.flatMap((row) => row.state.signals.map((signal) => ({ ...signal, round: row.round, item: row.item })));
+  const allTop = unique(signals.flatMap((signal) => signal.top || []));
+  const allBottom = unique(signals.flatMap((signal) => signal.bottom || []));
+  const signalCards = signals.length ? signals.map((signal) => {
+    const top = signal.top?.length ? signal.top : [];
+    const bottom = signal.bottom?.length ? signal.bottom : [];
+    const targets = top.length ? top : bottom;
+    const targetLabel = top.length ? 'เลข 3 ตัวที่ติดตาม' : 'เลข 2 หลักที่ติดตาม (กลับตัวได้)';
+    return `<article class="latest-prediction-card ${signal.tone}"><header><div><small>คำนวณจากรอบ ${String(signal.round).padStart(3, '0')} · ผล ${signal.item.top_number}–${signal.item.bottom_number}</small><h4>${signal.name}</h4></div><span>ตรวจรอบ ${String(signal.round + 1).padStart(3, '0')}–${String(Math.min(signal.round + 6, 264)).padStart(3, '0')}</span></header><p>${signal.note}</p><div class="latest-targets"><b>${targetLabel}</b><div>${targets.map((value) => `<i>${value}</i>`).join('')}</div></div></article>`;
+  }).join('') : '<div class="latest-prediction-empty compact">6 รอบล่าสุดยังไม่เข้าเงื่อนไขของเทคนิคที่เปิดใช้งาน</div>';
+  const sourceRounds = latest.map((row) => `<span><b>${String(row.round).padStart(3, '0')}</b><small>${row.item.top_number}–${row.item.bottom_number}</small><i>${row.state.signals.length ? `${row.state.signals.length} เทคนิค` : 'ไม่เข้าเทคนิค'}</i></span>`).join('');
+  const summary = `<aside class="latest-prediction-summary"><div><small>รวมเลข 3 ตัว</small><strong>${allTop.length}</strong><p>${allTop.length ? allTop.join(', ') : 'ยังไม่มีชุดแนะนำ'}</p></div><div><small>รวมเลข 2 หลัก</small><strong>${allBottom.length}</strong><p>${allBottom.length ? allBottom.join(', ') : 'ยังไม่มีชุดแนะนำ'}</p></div></aside>`;
+  board.innerHTML = `<header><div><p class="eyebrow">LATEST 6-ROUND FORECAST</p><h3>สรุปคำทำนายจาก 6 รอบล่าสุด</h3><p>คำนวณจากข้อมูลล่าสุดที่รับเข้า · แยกที่มาและช่วงติดตามของแต่ละเทคนิค</p></div><span>อัปเดตถึงรอบ ${String(latest[0].round).padStart(3, '0')}</span></header><div class="latest-source-strip">${sourceRounds}</div>${summary}<div class="latest-prediction-list">${signalCards}</div><footer>แนวทางจากรูปแบบทางสถิติ ไม่ใช่การรับประกันผล · เมื่อมีผลใหม่จาก LINE/D1 ส่วนนี้จะคำนวณใหม่โดยอัตโนมัติ</footer>`;
 }
 
 function renderAnalysisDashboard() {
@@ -214,8 +240,13 @@ function renderAnalysisDashboard() {
       const round = start + offset, state = roundStates[round - 1];
       const hit = state.hits[0] || null;
       const signalPositions = item ? analysisSignalPositions(item, state.signals) : { top: [], bottom: [] };
-      const topKinds = hit ? (hit.matchedAt.startsWith('3 ตัวบน') ? ['result-hit','result-hit','result-hit'] : (hit.matchedAt.startsWith('สองตัวท้าย') ? ['', 'result-hit','result-hit'] : ['', '', ''])) : signalPositions.top;
-      const bottomKinds = hit?.matchedAt.startsWith('2 ตัวล่าง') ? ['result-hit','result-hit'] : signalPositions.bottom;
+      const hasTopHit = state.hits.some((value) => value.matchedAt.startsWith('3 ตัวบน'));
+      const hasTopTailHit = state.hits.some((value) => value.matchedAt.startsWith('สองตัวท้าย'));
+      const hasBottomHit = state.hits.some((value) => value.matchedAt.startsWith('2 ตัวล่าง'));
+      const topHitKinds = hasTopHit ? ['result-hit','result-hit','result-hit'] : (hasTopTailHit ? ['', 'result-hit','result-hit'] : ['', '', '']);
+      const bottomHitKinds = hasBottomHit ? ['result-hit','result-hit'] : ['', ''];
+      const topKinds = mergeDigitKinds(signalPositions.top, topHitKinds);
+      const bottomKinds = mergeDigitKinds(signalPositions.bottom, bottomHitKinds);
       const techniqueText = state.hits.length ? state.hits.map((value) => `✓ ถูกเทคนิค ${value.name} · จากรอบ ${String(value.sourceRound).padStart(3, '0')} · ตาม ${value.elapsed}/6`).join('<br>') : (state.signals.length ? state.signals.map((signal) => `เข้า ${signal.name}`).join(' ✓ ') : (state.expired.length ? `ไม่เข้าเทคนิค · ครบ 6 รอบ (${state.expired.map((value) => value.name).join(', ')})` : (item ? (Object.keys(TECHNIQUE_DEFAULTS).some(isTechniqueEnabled) ? 'ยังไม่เข้าเทคนิค' : 'ปิดทุกเทคนิค') : 'รอผล')));
       const currentDetail = item ? `<div class="dialog-round-result"><div><small>ผลรอบ ${String(round).padStart(3, '0')}</small><b>บน ${analysisDigits(item.top_number, topKinds)} <i>·</i> ล่าง ${analysisDigits(item.bottom_number, bottomKinds)}</b></div><strong class="${state.hits.length ? 'hit' : (state.signals.length ? 'signal' : '')}">${techniqueText}</strong></div>` : `<div class="dialog-lot-status"><b>รอบ ${String(round).padStart(3, '0')} ยังไม่มีผล</b><span>ระบบจะแสดงการคำนวณอัตโนมัติเมื่อได้รับข้อมูลจาก LINE</span></div>`;
       const hitDetail = state.hits.length ? `<section class="dialog-hit-proof"><h4>ผลการทำนายก่อนหน้า · ถูกเทคนิค</h4>${state.hits.map((value) => `<p><b>${value.name}</b> จากรอบ ${String(value.sourceRound).padStart(3, '0')} ถูกเทคนิคที่ <strong>${value.matchedAt}</strong> ในรอบติดตาม ${value.elapsed}/6</p><p>ระบบเทียบแบบกลับตำแหน่ง จึงถือว่า 135 = 351 = 153 และ 23 = 32</p>${predictionDetail(value)}`).join('')}</section>` : '';
@@ -231,6 +262,7 @@ function renderAnalysisDashboard() {
   document.getElementById('analysisFilled').textContent = `${realtimeResults.length} / 264`;
   document.getElementById('analysisTriggered').textContent = triggeredLots;
   document.getElementById('analysisPassed').textContent = passedLots;
+  renderLatestPredictionBoard(rows);
   const ordered = [...rows.filter((row) => row.item).sort((a, b) => b.round - a.round), ...rows.filter((row) => !row.item).sort((a, b) => a.round - b.round)];
   grid.innerHTML = `<div class="analysis-long-table"><table><thead><tr><th>ล็อต</th><th>รอบ</th><th>เวลา</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สรุปผลวิเคราะห์</th><th>รายละเอียด</th></tr></thead><tbody>${ordered.map((row) => `<tr class="${row.state.hits.length ? 'is-hit' : ''} ${row.state.signals.length ? 'has-signal' : ''} ${row.item ? '' : 'is-waiting'}"><td><span class="lot-pill">ล็อต ${String(row.lot).padStart(2, '0')}</span></td><td><b>${String(row.round).padStart(3, '0')}</b></td><td>${row.item?.draw_time || '—'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.top_number, row.topKinds) : '— — —'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.bottom_number, row.bottomKinds) : '— —'}</td><td><span class="analysis-row-summary">${row.techniqueText}</span></td><td><button class="analysis-more" type="button" data-title="ล็อต ${String(row.lot).padStart(2, '0')} · รอบ ${String(row.round).padStart(3, '0')}" data-detail="${encodeURIComponent(row.detail)}">ดูเพิ่มเติม</button></td></tr>`).join('')}</tbody></table></div>`;
 }
