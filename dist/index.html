@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css?v=10" />
   <link rel="stylesheet" href="./enhancements.css?v=11" />
+  <link rel="stylesheet" href="./realtime-template.css?v=1" />
 </head>
 <body>
   <div class="shell">
@@ -40,7 +41,7 @@
       <section class="page active" id="dashboard">
         <div class="round-strip realtime-strip">
           <div><span>วันที่ข้อมูล</span><strong id="realtimeDateLabel">—</strong></div>
-          <div><span>รับข้อมูลแล้ว</span><strong><i id="realtimeFilled">0</i> / 214 รอบ</strong></div>
+          <div><span>รับข้อมูลแล้ว</span><strong><i id="realtimeFilled">0</i> / 264 รอบ</strong></div>
           <div><span>กลุ่มที่กำลังดู</span><strong id="realtimeGroupName">ยังไม่พบกลุ่ม</strong></div>
           <div class="countdown"><span>อัปเดตอีกครั้งใน</span><strong id="countdown">00:30</strong></div>
           <div class="progress"><i id="progressBar"></i></div>
@@ -69,8 +70,20 @@
           <div class="daily-history-list" id="dailyHistoryList"><p>กำลังโหลดประวัติรายวัน</p></div>
         </article>
 
+        <article class="round-template-card">
+          <div class="section-head"><div><p class="eyebrow">DAILY TEMPLATE · 264 ROUNDS</p><h2>ตารางรับผลจาก LINE</h2><p>รอบใหม่จะเติมลงช่องอัตโนมัติ ส่วนรอบที่ยังไม่มาจะแสดงเป็นช่องว่าง</p></div><span class="template-total"><i id="templateFilled">0</i> / 264 รอบ</span></div>
+          <div class="line-intake-stats">
+            <div><span>ข้อความวันนี้</span><strong id="statMessages">0</strong></div>
+            <div><span>ข้อความที่มีผล</span><strong id="statAccepted">0</strong></div>
+            <div><span>เพิ่มรอบใหม่</span><strong id="statInserted">0</strong></div>
+            <div><span>ข้อมูลรอบซ้ำ</span><strong id="statDuplicates">0</strong></div>
+            <div><span>อ่านข้อความไม่ได้</span><strong id="statUnreadable">0</strong></div>
+          </div>
+          <div class="round-template-grid" id="roundTemplate"></div>
+        </article>
+
         <article class="table-card realtime-card">
-          <div class="section-head"><div><p class="eyebrow">REALTIME · 214 ROUNDS</p><h2>ผลรายรอบวันนี้</h2></div><div class="realtime-actions"><label>เลือกวันที่ <input id="realtimeDate" type="date" /></label><label>กลุ่ม LINE <select id="realtimeSourceSelect"><option value="">ยังไม่พบกลุ่ม</option></select></label><button id="refreshRealtime" class="text-button" type="button">อัปเดตตอนนี้ ↻</button></div></div>
+          <div class="section-head"><div><p class="eyebrow">REALTIME · 264 ROUNDS</p><h2>รายละเอียดผลรายรอบ</h2></div><div class="realtime-actions"><label>เลือกวันที่ <input id="realtimeDate" type="date" /></label><label>กลุ่ม LINE <select id="realtimeSourceSelect"><option value="">ยังไม่พบกลุ่ม</option></select></label><button id="refreshRealtime" class="text-button" type="button">อัปเดตตอนนี้ ↻</button></div></div>
           <div class="sync-message" id="syncMessage"><i></i><span>กำลังโหลดข้อมูลล่าสุด</span></div>
           <div class="table-wrap realtime-table-wrap"><table><thead><tr><th>รอบ</th><th>เวลาประกาศ</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สถานะ</th></tr></thead><tbody id="historyRows"></tbody></table></div>
         </article>

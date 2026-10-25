@@ -13,6 +13,8 @@ const realtimeDateInput = document.getElementById('realtimeDate');
 const realtimeSourceSelect = document.getElementById('realtimeSourceSelect');
 const historyRows = document.getElementById('historyRows');
 const dailyHistoryList = document.getElementById('dailyHistoryList');
+const roundTemplate = document.getElementById('roundTemplate');
+const EXPECTED_ROUNDS = 264;
 
 function thailandDate() {
   const parts = new Intl.DateTimeFormat('en', {
@@ -24,7 +26,7 @@ function thailandDate() {
 
 function renderRealtimeRows(results = []) {
   const byRound = new Map(results.map((item) => [Number(item.round_no), item]));
-  historyRows.innerHTML = Array.from({ length: 214 }, (_, index) => {
+  historyRows.innerHTML = Array.from({ length: EXPECTED_ROUNDS }, (_, index) => {
     const round = index + 1;
     const item = byRound.get(round);
     return `<tr class="${item ? 'round-received' : 'round-waiting'}">
@@ -35,6 +37,24 @@ function renderRealtimeRows(results = []) {
       <td>${item ? '<span class="verified">✓ รับข้อมูลแล้ว</span>' : '<span class="waiting">รอผล</span>'}</td>
     </tr>`;
   }).join('');
+  const blockRanges = [[1, 53], [54, 106], [107, 159], [160, 212], [213, 264]];
+  roundTemplate.innerHTML = blockRanges.map(([start, end]) => `<section class="round-template-block">
+    <header><span>รอบ</span><span>บน</span><span>ล่าง</span></header>
+    ${Array.from({ length: end - start + 1 }, (_, offset) => {
+      const round = start + offset;
+      const item = byRound.get(round);
+      return `<div class="template-row${item ? ' has-result' : ''}"><b>${round}</b><strong>${item?.top_number || ''}</strong><strong>${item?.bottom_number || ''}</strong></div>`;
+    }).join('')}
+  </section>`).join('');
+  document.getElementById('templateFilled').textContent = results.length;
+}
+
+function renderIntakeStats(stats = {}) {
+  document.getElementById('statMessages').textContent = stats.messages || 0;
+  document.getElementById('statAccepted').textContent = stats.accepted_messages || 0;
+  document.getElementById('statInserted').textContent = stats.new_rounds || 0;
+  document.getElementById('statDuplicates').textContent = stats.duplicate_rounds || 0;
+  document.getElementById('statUnreadable').textContent = stats.unreadable_messages || 0;
 }
 
 async function loadRealtimeResults({ quiet = false } = {}) {
@@ -53,6 +73,7 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     const payload = await response.json();
     const results = payload.results || [];
     renderRealtimeRows(results);
+    renderIntakeStats(payload.stats);
     document.getElementById('realtimeFilled').textContent = payload.filled || 0;
     document.getElementById('realtimeGroupName').textContent = payload.source?.source_name || 'ยังไม่พบกลุ่ม';
     document.getElementById('realtimeDateLabel').textContent = payload.draw_date || date;
@@ -61,7 +82,7 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     document.getElementById('latestBottom').textContent = latest?.bottom_number || '--';
     document.getElementById('latestRound').textContent = latest ? String(latest.round_no).padStart(3, '0') : '—';
     document.getElementById('realtimeSource').textContent = latest ? `${payload.source?.source_name || 'LINE'} · เวลา ${latest.draw_time || 'ไม่ระบุ'}` : 'รอข้อมูลจาก LINE Webhook';
-    document.getElementById('realtimeStatus').textContent = results.length ? `อัปเดตแล้ว ${results.length} จาก 214 รอบ` : 'วันนี้ยังไม่มีผลส่งเข้ามา';
+    document.getElementById('realtimeStatus').textContent = results.length ? `อัปเดตแล้ว ${results.length} จาก 264 รอบ` : 'วันนี้ยังไม่มีผลส่งเข้ามา';
     message.className = 'sync-message success';
     const receipt = payload.last_receipt;
     const receiptText = receipt ? ` · ข้อความล่าสุด: เพิ่มใหม่ ${receipt.inserted_rows} / ข้ามรอบที่มีแล้ว ${receipt.ignored_rows}` : '';
@@ -69,6 +90,7 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     remaining = 30;
   } catch (error) {
     renderRealtimeRows([]);
+    renderIntakeStats();
     message.className = 'sync-message error';
     message.querySelector('span').textContent = `เชื่อมต่อข้อมูลไม่ได้ (${error.message})`;
   }
@@ -84,7 +106,7 @@ async function loadRealtimeSources({ preserve = true } = {}) {
   const options = sources.length ? sources.map((source) => {
     const option = document.createElement('option');
     option.value = source.source_id;
-    option.textContent = `${source.source_name} · ${source.filled}/214 รอบ`;
+    option.textContent = `${source.source_name} · ${source.filled}/264 รอบ`;
     return option;
   }) : [Object.assign(document.createElement('option'), { value: '', textContent: 'ยังไม่พบกลุ่ม' })];
   realtimeSourceSelect.replaceChildren(...options);
@@ -105,7 +127,7 @@ async function loadDailyHistory() {
     document.getElementById('historyDayCount').textContent = `${dates.length} วันที่บันทึกไว้`;
     dailyHistoryList.innerHTML = '';
     if (!dates.length) {
-      dailyHistoryList.innerHTML = '<p class="history-empty">ยังไม่มีข้อมูลย้อนหลัง เมื่อแชร์ผลเข้ากลุ่ม Test API ระบบจะสร้างประวัติของวันนั้นอัตโนมัติ</p>';
+      dailyHistoryList.innerHTML = '<p class="history-empty">ยังไม่มีข้อมูลย้อนหลัง เมื่อแชร์ผลเข้ากลุ่ม Yiki-online ระบบจะสร้างประวัติของวันนั้นอัตโนมัติ</p>';
       return;
     }
     dates.forEach((item) => {

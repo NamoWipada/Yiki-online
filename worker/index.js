@@ -45,7 +45,7 @@ function parseResultLines(text) {
     const match = line.match(/^(\d{1,3})\s*:\s*(\d{1,2}:\d{2})\s*(?:➡️?|→|->)?\s*(\d{3})\s*-\s*(\d{2})\s*$/u);
     if (!match) continue;
     const roundNo = Number(match[1]);
-    if (roundNo < 1 || roundNo > 214) continue;
+    if (roundNo < 1 || roundNo > 264) continue;
     results.push({ roundNo, time: match[2].padStart(5, "0"), top: match[3], bottom: match[4] });
   }
   return results;
@@ -81,25 +81,46 @@ function extractMessageDate(text, fallbackTimestamp = Date.now()) {
 async function saveLineEvents(payload, env) {
   const summary = { accepted: 0, inserted: 0, updated: 0, ignored: 0, rejected: 0, sources: [] };
   for (const event of payload.events || []) {
-    if (event.type !== "message" || event.message?.type !== "text") continue;
     const eventId = event.webhookEventId || crypto.randomUUID();
     const source = await resolveLineSource(event.source || {}, env);
+    const messageType = event.message?.type || event.type || "unknown";
+    const rawText = event.message?.type === "text" ? event.message.text : null;
+    const occurredAt = new Date(event.timestamp || Date.now()).toISOString();
+    const drawDate = extractMessageDate(rawText || "", event.timestamp || Date.now());
+    const logStatement = (status, parsedRows = 0, insertedRows = 0, duplicateRows = 0) => env.DB.prepare(
+      `INSERT INTO line_message_log
+       (event_id, source_id, source_type, source_name, draw_date, message_id, sender_user_id, message_type,
+        raw_text, parsed_rows, inserted_rows, duplicate_rows, status, occurred_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(event_id) DO NOTHING`
+    ).bind(eventId, source.id, source.type, source.name, drawDate, event.message?.id || null,
+      event.source?.userId || null, messageType, rawText, parsedRows, insertedRows, duplicateRows, status, occurredAt);
+    const receivedBefore = await env.DB.prepare(
+      "SELECT event_id FROM line_message_log WHERE event_id = ? UNION SELECT event_id FROM webhook_receipts WHERE event_id = ? LIMIT 1"
+    ).bind(eventId, eventId).first();
+    if (receivedBefore) { summary.ignored += 1; continue; }
+    if (event.type !== "message" || event.message?.type !== "text") {
+      await logStatement("unsupported").run();
+      summary.ignored += 1;
+      continue;
+    }
     const allowedName = env.ALLOWED_LINE_GROUP_NAME?.trim().toLocaleLowerCase();
     if (allowedName && (source.type !== "group" || source.name.trim().toLocaleLowerCase() !== allowedName)) {
+      await logStatement("rejected_group").run();
       summary.rejected += 1;
       continue;
     }
-    const occurredAt = new Date(event.timestamp || Date.now()).toISOString();
-    const drawDate = extractMessageDate(event.message.text, event.timestamp || Date.now());
-    const receivedBefore = await env.DB.prepare("SELECT event_id FROM webhook_receipts WHERE event_id = ?").bind(eventId).first();
-    if (receivedBefore) { summary.ignored += 1; continue; }
     let parsedRows = parseResultLines(event.message.text);
     if (!parsedRows.length) {
       const single = parseResult(event.message.text);
-      if (single?.roundNo && single.roundNo <= 214) parsedRows = [{ ...single, time: null }];
+      if (single?.roundNo && single.roundNo <= 264) parsedRows = [{ ...single, time: null }];
     }
     parsedRows = [...new Map(parsedRows.map((row) => [row.roundNo, row])).values()];
-    if (!parsedRows.length) continue;
+    if (!parsedRows.length) {
+      await logStatement("no_results").run();
+      summary.ignored += 1;
+      continue;
+    }
 
     const placeholders = parsedRows.map(() => "?").join(",");
     const existing = await env.DB.prepare(
@@ -123,6 +144,7 @@ async function saveLineEvents(payload, env) {
        (event_id, source_id, draw_date, received_rows, inserted_rows, updated_rows, ignored_rows, occurred_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(eventId, source.id, drawDate, parsedRows.length, inserted, updated, ignored, occurredAt));
+    statements.push(logStatement("accepted", parsedRows.length, inserted, ignored));
     await env.DB.batch(statements);
     summary.accepted += parsedRows.length;
     summary.inserted += inserted;
@@ -222,10 +244,19 @@ async function handleApi(request, env) {
     const { results } = await env.DB.prepare(
       `SELECT s.source_id, s.source_type, s.source_name, s.member_count,
               COUNT(r.id) AS filled, MAX(r.round_no) AS latest_round, MAX(r.updated_at) AS last_result_at
-       FROM line_sources s JOIN group_daily_results r ON r.source_id = s.source_id
-       WHERE r.draw_date = ? GROUP BY s.source_id ORDER BY last_result_at DESC`
+       FROM line_sources s LEFT JOIN group_daily_results r ON r.source_id = s.source_id AND r.draw_date = ?
+       GROUP BY s.source_id ORDER BY COALESCE(last_result_at, s.last_seen_at) DESC`
     ).bind(date).all();
     return json({ ok: true, draw_date: date, sources: results });
+  }
+
+  if (url.pathname === "/api/line-status" && request.method === "GET") {
+    const { results } = await env.DB.prepare(
+      `SELECT l.draw_date, l.source_name, l.message_type, l.status, l.parsed_rows,
+              l.inserted_rows, l.duplicate_rows, l.occurred_at
+       FROM line_message_log l ORDER BY l.created_at DESC LIMIT 20`
+    ).all();
+    return json({ ok: true, events: results });
   }
 
   if (url.pathname === "/api/results" && request.method === "GET") {
@@ -236,8 +267,10 @@ async function handleApi(request, env) {
     const requestedSource = url.searchParams.get("source_id");
     const selectedSource = requestedSource || (await env.DB.prepare(
       `SELECT source_id FROM group_daily_results WHERE draw_date = ? ORDER BY updated_at DESC LIMIT 1`
+    ).bind(latest).first())?.source_id || (await env.DB.prepare(
+      `SELECT source_id FROM line_message_log WHERE draw_date = ? AND status IN ('accepted', 'no_results') ORDER BY created_at DESC LIMIT 1`
     ).bind(latest).first())?.source_id;
-    if (!selectedSource) return json({ ok: true, draw_date: latest, expected_rounds: 214, filled: 0, results: [], source: null, last_receipt: null });
+    if (!selectedSource) return json({ ok: true, draw_date: latest, expected_rounds: 264, filled: 0, results: [], source: null, last_receipt: null, stats: { messages: 0, accepted_messages: 0, unreadable_messages: 0, new_rounds: 0, duplicate_rounds: 0 } });
     const { results } = await env.DB.prepare(
       `SELECT round_no, draw_time, top_number, bottom_number, occurred_at, updated_at
        FROM group_daily_results WHERE draw_date = ? AND source_id = ? ORDER BY round_no ASC`
@@ -249,7 +282,15 @@ async function handleApi(request, env) {
       `SELECT received_rows, inserted_rows, updated_rows, ignored_rows, created_at
        FROM webhook_receipts WHERE draw_date = ? AND source_id = ? ORDER BY created_at DESC LIMIT 1`
     ).bind(latest, selectedSource).first();
-    return json({ ok: true, draw_date: latest, expected_rounds: 214, filled: results.length, missing: 214 - results.length, results, source, last_receipt: receipt || null });
+    const stats = await env.DB.prepare(
+      `SELECT COUNT(*) AS messages,
+              COALESCE(SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END), 0) AS accepted_messages,
+              COALESCE(SUM(CASE WHEN status = 'no_results' THEN 1 ELSE 0 END), 0) AS unreadable_messages,
+              COALESCE(SUM(inserted_rows), 0) AS new_rounds,
+              COALESCE(SUM(duplicate_rows), 0) AS duplicate_rounds
+       FROM line_message_log WHERE draw_date = ? AND source_id = ?`
+    ).bind(latest, selectedSource).first();
+    return json({ ok: true, draw_date: latest, expected_rounds: 264, filled: results.length, missing: 264 - results.length, results, source, last_receipt: receipt || null, stats });
   }
 
   if (url.pathname === "/api/result-dates" && request.method === "GET") {
