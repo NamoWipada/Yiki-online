@@ -41,6 +41,7 @@
         <div class="round-strip realtime-strip">
           <div><span>วันที่ข้อมูล</span><strong id="realtimeDateLabel">—</strong></div>
           <div><span>รับข้อมูลแล้ว</span><strong><i id="realtimeFilled">0</i> / 214 รอบ</strong></div>
+          <div><span>กลุ่มที่กำลังดู</span><strong id="realtimeGroupName">ยังไม่พบกลุ่ม</strong></div>
           <div class="countdown"><span>อัปเดตอีกครั้งใน</span><strong id="countdown">00:30</strong></div>
           <div class="progress"><i id="progressBar"></i></div>
         </div>
@@ -64,7 +65,7 @@
         </div>
 
         <article class="table-card realtime-card">
-          <div class="section-head"><div><p class="eyebrow">REALTIME · 214 ROUNDS</p><h2>ผลรายรอบวันนี้</h2></div><div class="realtime-actions"><label>เลือกวันที่ <input id="realtimeDate" type="date" /></label><button id="refreshRealtime" class="text-button" type="button">อัปเดตตอนนี้ ↻</button></div></div>
+          <div class="section-head"><div><p class="eyebrow">REALTIME · 214 ROUNDS</p><h2>ผลรายรอบวันนี้</h2></div><div class="realtime-actions"><label>เลือกวันที่ <input id="realtimeDate" type="date" /></label><label>กลุ่ม LINE <select id="realtimeSourceSelect"><option value="">ยังไม่พบกลุ่ม</option></select></label><button id="refreshRealtime" class="text-button" type="button">อัปเดตตอนนี้ ↻</button></div></div>
           <div class="sync-message" id="syncMessage"><i></i><span>กำลังโหลดข้อมูลล่าสุด</span></div>
           <div class="table-wrap realtime-table-wrap"><table><thead><tr><th>รอบ</th><th>เวลาประกาศ</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สถานะ</th></tr></thead><tbody id="historyRows"></tbody></table></div>
         </article>

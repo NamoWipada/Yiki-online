@@ -10,6 +10,7 @@ function showPage(target, item) {
 }
 
 const realtimeDateInput = document.getElementById('realtimeDate');
+const realtimeSourceSelect = document.getElementById('realtimeSourceSelect');
 const historyRows = document.getElementById('historyRows');
 
 function thailandDate() {
@@ -37,27 +38,33 @@ function renderRealtimeRows(results = []) {
 
 async function loadRealtimeResults({ quiet = false } = {}) {
   const date = realtimeDateInput.value || thailandDate();
+  const sourceId = realtimeSourceSelect.value;
   const message = document.getElementById('syncMessage');
   if (!quiet) {
     message.className = 'sync-message loading';
     message.querySelector('span').textContent = 'กำลังโหลดข้อมูลล่าสุด';
   }
   try {
-    const response = await fetch(`/api/results?date=${encodeURIComponent(date)}`, { cache: 'no-store' });
+    const query = new URLSearchParams({ date });
+    if (sourceId) query.set('source_id', sourceId);
+    const response = await fetch(`/api/results?${query}`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     const results = payload.results || [];
     renderRealtimeRows(results);
     document.getElementById('realtimeFilled').textContent = payload.filled || 0;
+    document.getElementById('realtimeGroupName').textContent = payload.source?.source_name || 'ยังไม่พบกลุ่ม';
     document.getElementById('realtimeDateLabel').textContent = payload.draw_date || date;
     const latest = results.at(-1);
     document.getElementById('latestTop').textContent = latest?.top_number || '---';
     document.getElementById('latestBottom').textContent = latest?.bottom_number || '--';
     document.getElementById('latestRound').textContent = latest ? String(latest.round_no).padStart(3, '0') : '—';
-    document.getElementById('realtimeSource').textContent = latest ? `รับจาก LINE · เวลา ${latest.draw_time || 'ไม่ระบุ'}` : 'รอข้อมูลจาก LINE Webhook';
+    document.getElementById('realtimeSource').textContent = latest ? `${payload.source?.source_name || 'LINE'} · เวลา ${latest.draw_time || 'ไม่ระบุ'}` : 'รอข้อมูลจาก LINE Webhook';
     document.getElementById('realtimeStatus').textContent = results.length ? `อัปเดตแล้ว ${results.length} จาก 214 รอบ` : 'วันนี้ยังไม่มีผลส่งเข้ามา';
     message.className = 'sync-message success';
-    message.querySelector('span').textContent = `ซิงก์ล่าสุด ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    const receipt = payload.last_receipt;
+    const receiptText = receipt ? ` · ข้อความล่าสุด: ใหม่ ${receipt.inserted_rows} / ซ้ำหรืออัปเดต ${receipt.updated_rows}` : '';
+    message.querySelector('span').textContent = `ซิงก์ล่าสุด ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}${receiptText}`;
     remaining = 30;
   } catch (error) {
     renderRealtimeRows([]);
@@ -66,11 +73,29 @@ async function loadRealtimeResults({ quiet = false } = {}) {
   }
 }
 
+async function loadRealtimeSources({ preserve = true } = {}) {
+  const date = realtimeDateInput.value || thailandDate();
+  const previous = preserve ? realtimeSourceSelect.value : '';
+  const response = await fetch(`/api/sources?date=${encodeURIComponent(date)}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const payload = await response.json();
+  const sources = payload.sources || [];
+  const options = sources.length ? sources.map((source) => {
+    const option = document.createElement('option');
+    option.value = source.source_id;
+    option.textContent = `${source.source_name} · ${source.filled}/214 รอบ`;
+    return option;
+  }) : [Object.assign(document.createElement('option'), { value: '', textContent: 'ยังไม่พบกลุ่ม' })];
+  realtimeSourceSelect.replaceChildren(...options);
+  if (previous && sources.some((source) => source.source_id === previous)) realtimeSourceSelect.value = previous;
+}
+
 realtimeDateInput.value = thailandDate();
 renderRealtimeRows();
-document.getElementById('refreshRealtime').addEventListener('click', () => loadRealtimeResults());
-realtimeDateInput.addEventListener('change', () => loadRealtimeResults());
-loadRealtimeResults();
+document.getElementById('refreshRealtime').addEventListener('click', async () => { await loadRealtimeSources(); await loadRealtimeResults(); });
+realtimeDateInput.addEventListener('change', async () => { await loadRealtimeSources({ preserve: false }); await loadRealtimeResults(); });
+realtimeSourceSelect.addEventListener('change', () => loadRealtimeResults());
+loadRealtimeSources().then(() => loadRealtimeResults()).catch(() => loadRealtimeResults());
 
 const pairMap = { '0': '2', '1': '7', '2': '0', '3': '8', '4': '5', '5': '4', '6': '9', '7': '1', '8': '3', '9': '6' };
 const sequenceBases = ['089', '567', '243', '190', '789'];
@@ -573,7 +598,7 @@ sidebarCollapse.addEventListener('click', () => {
 let remaining = 30;
 setInterval(() => {
   remaining = remaining <= 0 ? 30 : remaining - 1;
-  if (remaining === 30) loadRealtimeResults({ quiet: true });
+  if (remaining === 30) loadRealtimeSources().then(() => loadRealtimeResults({ quiet: true })).catch(() => loadRealtimeResults({ quiet: true }));
   const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
   const seconds = String(remaining % 60).padStart(2, '0');
   document.getElementById('countdown').textContent = `${minutes}:${seconds}`;

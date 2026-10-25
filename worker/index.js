@@ -61,38 +61,93 @@ function bangkokDate(timestamp) {
 }
 
 async function saveLineEvents(payload, env) {
-  let accepted = 0;
+  const summary = { accepted: 0, inserted: 0, updated: 0, ignored: 0, sources: [] };
   for (const event of payload.events || []) {
     if (event.type !== "message" || event.message?.type !== "text") continue;
     const eventId = event.webhookEventId || crypto.randomUUID();
-    const groupId = event.source?.groupId || event.source?.roomId || null;
+    const source = await resolveLineSource(event.source || {}, env);
     const occurredAt = new Date(event.timestamp || Date.now()).toISOString();
     const drawDate = bangkokDate(event.timestamp || Date.now());
+    const receivedBefore = await env.DB.prepare("SELECT event_id FROM webhook_receipts WHERE event_id = ?").bind(eventId).first();
+    if (receivedBefore) { summary.ignored += 1; continue; }
     let parsedRows = parseResultLines(event.message.text);
     if (!parsedRows.length) {
       const single = parseResult(event.message.text);
       if (single?.roundNo && single.roundNo <= 214) parsedRows = [{ ...single, time: null }];
     }
+    parsedRows = [...new Map(parsedRows.map((row) => [row.roundNo, row])).values()];
     if (!parsedRows.length) continue;
 
+    const placeholders = parsedRows.map(() => "?").join(",");
+    const existing = await env.DB.prepare(
+      `SELECT round_no FROM group_daily_results WHERE draw_date = ? AND source_id = ? AND round_no IN (${placeholders})`
+    ).bind(drawDate, source.id, ...parsedRows.map((row) => row.roundNo)).all();
+    const existingRounds = new Set(existing.results.map((row) => Number(row.round_no)));
+    const inserted = parsedRows.filter((row) => !existingRounds.has(row.roundNo)).length;
+    const updated = parsedRows.length - inserted;
+
     const statements = parsedRows.map((parsed) => env.DB.prepare(
-      `INSERT INTO daily_results
-       (draw_date, round_no, draw_time, top_number, bottom_number, source_text, line_group_id, event_id, occurred_at)
+      `INSERT INTO group_daily_results
+       (draw_date, source_id, round_no, draw_time, top_number, bottom_number, source_text, event_id, occurred_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(draw_date, round_no) DO UPDATE SET
+       ON CONFLICT(draw_date, source_id, round_no) DO UPDATE SET
          draw_time = excluded.draw_time,
          top_number = excluded.top_number,
          bottom_number = excluded.bottom_number,
          source_text = excluded.source_text,
-         line_group_id = excluded.line_group_id,
          event_id = excluded.event_id,
          occurred_at = excluded.occurred_at,
          updated_at = datetime('now')`
-    ).bind(drawDate, parsed.roundNo, parsed.time, parsed.top, parsed.bottom, event.message.text, groupId, eventId, occurredAt));
-    const batch = await env.DB.batch(statements);
-    accepted += batch.reduce((total, result) => total + (result.meta?.changes || 0), 0);
+    ).bind(drawDate, source.id, parsed.roundNo, parsed.time, parsed.top, parsed.bottom, event.message.text, eventId, occurredAt));
+    statements.push(env.DB.prepare(
+      `INSERT INTO webhook_receipts
+       (event_id, source_id, draw_date, received_rows, inserted_rows, updated_rows, ignored_rows, occurred_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
+    ).bind(eventId, source.id, drawDate, parsedRows.length, inserted, updated, occurredAt));
+    await env.DB.batch(statements);
+    summary.accepted += parsedRows.length;
+    summary.inserted += inserted;
+    summary.updated += updated;
+    if (!summary.sources.some((item) => item.id === source.id)) summary.sources.push(source);
   }
-  return accepted;
+  return summary;
+}
+
+function fallbackSourceName(type, id) {
+  const shortId = id.slice(-6) || "unknown";
+  if (type === "group") return `กลุ่ม LINE · ${shortId}`;
+  if (type === "room") return `ห้อง LINE · ${shortId}`;
+  return `แชต LINE · ${shortId}`;
+}
+
+async function resolveLineSource(source, env) {
+  const type = source.type || "unknown";
+  const id = source.groupId || source.roomId || source.userId || "unknown";
+  let name = fallbackSourceName(type, id), pictureUrl = null, memberCount = null;
+  if (type === "group" && env.LINE_CHANNEL_ACCESS_TOKEN) {
+    try {
+      const response = await fetch(`https://api.line.me/v2/bot/group/${encodeURIComponent(id)}/summary`, {
+        headers: { authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}` },
+      });
+      if (response.ok) {
+        const profile = await response.json();
+        name = profile.groupName || name;
+        pictureUrl = profile.pictureUrl || null;
+        memberCount = profile.memberCount ?? null;
+      }
+    } catch { /* ชื่อสำรองยังทำให้รับผลต่อได้ */ }
+  }
+  await env.DB.prepare(
+    `INSERT INTO line_sources (source_id, source_type, source_name, picture_url, member_count, last_seen_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(source_id) DO UPDATE SET
+       source_type = excluded.source_type,
+       source_name = CASE WHEN excluded.source_name LIKE '% · %' THEN line_sources.source_name ELSE excluded.source_name END,
+       picture_url = COALESCE(excluded.picture_url, line_sources.picture_url),
+       member_count = COALESCE(excluded.member_count, line_sources.member_count),
+       last_seen_at = datetime('now'), updated_at = datetime('now')`
+  ).bind(id, type, name, pictureUrl, memberCount).run();
+  return { id, type, name, member_count: memberCount };
 }
 
 async function handleApi(request, env) {
@@ -114,26 +169,49 @@ async function handleApi(request, env) {
     try { payload = JSON.parse(body); }
     catch { return json({ ok: false, error: "invalid json" }, 400); }
 
-    const accepted = await saveLineEvents(payload, env);
-    return json({ ok: true, accepted });
+    const result = await saveLineEvents(payload, env);
+    return json({ ok: true, ...result });
+  }
+
+  if (url.pathname === "/api/sources" && request.method === "GET") {
+    const date = url.searchParams.get("date") || bangkokDate(Date.now());
+    const { results } = await env.DB.prepare(
+      `SELECT s.source_id, s.source_type, s.source_name, s.member_count,
+              COUNT(r.id) AS filled, MAX(r.round_no) AS latest_round, MAX(r.updated_at) AS last_result_at
+       FROM line_sources s JOIN group_daily_results r ON r.source_id = s.source_id
+       WHERE r.draw_date = ? GROUP BY s.source_id ORDER BY last_result_at DESC`
+    ).bind(date).all();
+    return json({ ok: true, draw_date: date, sources: results });
   }
 
   if (url.pathname === "/api/results" && request.method === "GET") {
     const requestedDate = url.searchParams.get("date");
     const latest = requestedDate || (await env.DB.prepare(
-      "SELECT MAX(draw_date) AS draw_date FROM daily_results"
+      "SELECT MAX(draw_date) AS draw_date FROM group_daily_results"
     ).first())?.draw_date || bangkokDate(Date.now());
+    const requestedSource = url.searchParams.get("source_id");
+    const selectedSource = requestedSource || (await env.DB.prepare(
+      `SELECT source_id FROM group_daily_results WHERE draw_date = ? ORDER BY updated_at DESC LIMIT 1`
+    ).bind(latest).first())?.source_id;
+    if (!selectedSource) return json({ ok: true, draw_date: latest, expected_rounds: 214, filled: 0, results: [], source: null, last_receipt: null });
     const { results } = await env.DB.prepare(
       `SELECT round_no, draw_time, top_number, bottom_number, occurred_at, updated_at
-       FROM daily_results WHERE draw_date = ? ORDER BY round_no ASC`
-    ).bind(latest).all();
-    return json({ ok: true, draw_date: latest, expected_rounds: 214, filled: results.length, results });
+       FROM group_daily_results WHERE draw_date = ? AND source_id = ? ORDER BY round_no ASC`
+    ).bind(latest, selectedSource).all();
+    const source = await env.DB.prepare(
+      `SELECT source_id, source_type, source_name, member_count, last_seen_at FROM line_sources WHERE source_id = ?`
+    ).bind(selectedSource).first();
+    const receipt = await env.DB.prepare(
+      `SELECT received_rows, inserted_rows, updated_rows, ignored_rows, created_at
+       FROM webhook_receipts WHERE draw_date = ? AND source_id = ? ORDER BY created_at DESC LIMIT 1`
+    ).bind(latest, selectedSource).first();
+    return json({ ok: true, draw_date: latest, expected_rounds: 214, filled: results.length, missing: 214 - results.length, results, source, last_receipt: receipt || null });
   }
 
   if (url.pathname === "/api/result-dates" && request.method === "GET") {
     const { results } = await env.DB.prepare(
       `SELECT draw_date, COUNT(*) AS filled, MAX(round_no) AS latest_round
-       FROM daily_results GROUP BY draw_date ORDER BY draw_date DESC LIMIT 90`
+       FROM group_daily_results GROUP BY draw_date ORDER BY draw_date DESC LIMIT 90`
     ).all();
     return json({ ok: true, dates: results });
   }
@@ -149,4 +227,4 @@ export default {
   },
 };
 
-export { parseResult, parseResultLines, bangkokDate, verifyLineSignature };
+export { parseResult, parseResultLines, bangkokDate, verifyLineSignature, fallbackSourceName };
