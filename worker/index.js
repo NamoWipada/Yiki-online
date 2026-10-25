@@ -163,10 +163,34 @@ async function resolveLineSource(source, env) {
   return { id, type, name, member_count: memberCount };
 }
 
+async function discoverCjworld() {
+  const page = await fetch("https://www.cjworld6.com/login", {
+    headers: { "user-agent": "Mozilla/5.0 (compatible; YikiAnalytics/1.0)" },
+    redirect: "follow",
+  });
+  const html = await page.text();
+  const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)]
+    .map((match) => new URL(match[1], page.url).href)
+    .filter((src) => /pages\/(login|lotto)-/.test(src));
+  const candidates = new Set();
+  for (const scriptUrl of scripts) {
+    const script = await (await fetch(scriptUrl)).text();
+    for (const match of script.matchAll(/["'`]([^"'`]{1,180})["'`]/g)) {
+      const value = match[1];
+      if (/api|login|signin|auth|lotto|result|yeekee|yiki/i.test(value)) candidates.add(value);
+    }
+  }
+  return { ok: page.ok, final_url: page.url, status: page.status, scripts, candidates: [...candidates].slice(0, 200) };
+}
+
 async function handleApi(request, env) {
   const url = new URL(request.url);
   if (url.pathname === "/api/health") {
     return json({ ok: true, service: "yiki-analytics", time: new Date().toISOString() });
+  }
+
+  if (url.pathname === "/api/cjworld/discover" && request.method === "GET") {
+    return json(await discoverCjworld());
   }
 
   if (url.pathname === "/api/line/webhook" && request.method === "POST") {
