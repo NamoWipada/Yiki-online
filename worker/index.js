@@ -61,11 +61,16 @@ function bangkokDate(timestamp) {
 }
 
 async function saveLineEvents(payload, env) {
-  const summary = { accepted: 0, inserted: 0, updated: 0, ignored: 0, sources: [] };
+  const summary = { accepted: 0, inserted: 0, updated: 0, ignored: 0, rejected: 0, sources: [] };
   for (const event of payload.events || []) {
     if (event.type !== "message" || event.message?.type !== "text") continue;
     const eventId = event.webhookEventId || crypto.randomUUID();
     const source = await resolveLineSource(event.source || {}, env);
+    const allowedName = env.ALLOWED_LINE_GROUP_NAME?.trim().toLocaleLowerCase();
+    if (allowedName && (source.type !== "group" || source.name.trim().toLocaleLowerCase() !== allowedName)) {
+      summary.rejected += 1;
+      continue;
+    }
     const occurredAt = new Date(event.timestamp || Date.now()).toISOString();
     const drawDate = bangkokDate(event.timestamp || Date.now());
     const receivedBefore = await env.DB.prepare("SELECT event_id FROM webhook_receipts WHERE event_id = ?").bind(eventId).first();
