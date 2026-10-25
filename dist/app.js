@@ -91,7 +91,10 @@ function predictionsFromRound(item, roundInLot) {
   const predictions = [];
   const top = item.top_number, bottom = item.bottom_number;
   const groups = matchingGroups(top);
-  if (groups.length) predictions.push({ name: 'จีบเรียง → จปล', tone: 'jeeb', top: expandJeeb(top), bottom: expandTwoDigitRows(top.slice(-2)).flat(), note: `พบ ${top} ในกลุ่ม ${groups.map((group) => group.index + 1).join(', ')}` });
+  if (groups.length) {
+    const rows = expandThreeToTwoRows(top);
+    predictions.push({ name: 'จีบเรียง → จปล 12 คู่', tone: 'jeeb', top: [], bottom: rows.flat(), rows, note: `พบ ${top} ในกลุ่ม ${groups.map((group) => group.index + 1).join(', ')} จึงแปลงเลข 3 หลักเป็นคู่ 2 หลัก 12 ตัว` });
+  }
   const rule = ruleTrigger(top, bottom);
   if (rule.trick1) predictions.push({ name: 'พี่น้อง → เบิ้ล/จปร.', tone: 'sibling', top: [], bottom: [...doubleNumbers, ...jprNumbers], note: `หน่วยบน ${top[2]} เทียบสิบล่าง ${bottom[0]}` });
   if (rule.trick2) predictions.push({ name: 'รูซ้ำ → พี่น้อง', tone: 'same', top: [], bottom: ['01','10','12','21','23','32','34','43','45','54','56','65','67','76','78','87','89','98','90','09'], note: `พบเลขซ้ำ ${top[2]}–${bottom[0]}` });
@@ -108,13 +111,14 @@ function predictionDetail(prediction) {
   const topTargets = prediction.top?.length ? prediction.top.join(', ') : '—';
   const bottomTargets = prediction.bottom?.length ? prediction.bottom.join(', ') : '—';
   const steps = {
-    jeeb: 'ตรวจเลข 3 ตัวแบบไม่สนลำดับ → ระบุกลุ่มจีบเรียง → สลับคู่ จปล เพื่อสร้างชุดติดตาม',
+    jeeb: 'ตรวจเลข 3 ตัวแบบไม่สนลำดับ → จับคู่หลักที่ 1–2, 1–3 และ 2–3 → สลับคู่ จปล ได้ 12 คู่ → ตรวจสองตัวท้ายบนและเลขล่างแบบกลับตัวได้',
     sibling: 'เปรียบเทียบหลักหน่วยบนกับหลักสิบล่าง → ต่างกัน 1 ขั้น → ติดตามเลขเบิ้ลหรือ จปร.',
     same: 'เปรียบเทียบหลักหน่วยบนกับหลักสิบล่าง → เป็นเลขเดียวกัน → ติดตามเลขพี่น้อง',
     hunt: 'พบคู่สัญญาณ 33, 88, 38 หรือ 83 → ติดตามคู่ 43, 48, 53, 58',
     running: 'นำหลักหน่วยบนต่อกับเลขล่างของรอบแรก → สลับคู่ จปล ครบชุด',
   };
-  return `<article class="dialog-tech-card ${prediction.tone}"><header><b>${prediction.name}</b><span>เริ่มจากรอบ ${String(prediction.sourceRound).padStart(3, '0')}</span></header><p><strong>เหตุผลที่เข้าเทคนิค:</strong> ${prediction.note}</p><p><strong>วิธีคำนวณ:</strong> ${steps[prediction.tone] || 'ตรวจตามเงื่อนไขของเทคนิค'}</p><div class="dialog-target-grid"><div><small>ชุดเป้าหมาย 3 หลัก</small><b>${topTargets}</b></div><div><small>ชุดเป้าหมาย 2 หลัก</small><b>${bottomTargets}</b></div></div></article>`;
+  const rowList = prediction.rows?.length ? `<div class="dialog-pair-rows">${prediction.rows.map((row, index) => `<div><strong>แถว ${index + 1}</strong>${row.map((value) => `<i>${value}</i>`).join('')}</div>`).join('')}</div>` : '';
+  return `<article class="dialog-tech-card ${prediction.tone}"><header><b>${prediction.name}</b><span>เริ่มจากรอบ ${String(prediction.sourceRound).padStart(3, '0')}</span></header><p><strong>เหตุผลที่เข้าเทคนิค:</strong> ${prediction.note}</p><p><strong>วิธีคำนวณ:</strong> ${steps[prediction.tone] || 'ตรวจตามเงื่อนไขของเทคนิค'}</p>${rowList}<div class="dialog-target-grid"><div><small>ชุดเป้าหมาย 3 หลัก</small><b>${topTargets}</b></div><div><small>ชุดเป้าหมาย 2 หลัก (กลับตัวได้)</small><b>${bottomTargets}</b></div></div></article>`;
 }
 
 function renderAnalysisDashboard() {
@@ -166,7 +170,7 @@ function renderAnalysisDashboard() {
       const signalPositions = item ? analysisSignalPositions(item, state.signals) : { top: [], bottom: [] };
       const topKinds = hit ? (hit.matchedAt.startsWith('3 ตัวบน') ? ['result-hit','result-hit','result-hit'] : (hit.matchedAt.startsWith('สองตัวท้าย') ? ['', 'result-hit','result-hit'] : ['', '', ''])) : signalPositions.top;
       const bottomKinds = hit?.matchedAt.startsWith('2 ตัวล่าง') ? ['result-hit','result-hit'] : signalPositions.bottom;
-      const techniqueText = state.hits.length ? `✓ ถูกเทคนิค ${state.hits.map((value) => value.name).join(' + ')}` : (state.signals.length ? `เข้า ${state.signals.map((signal) => signal.name).join(' + ')} · ตาม 6 รอบ` : (state.expired.length ? `ไม่เข้าเทคนิค · ครบ 6 รอบ (${state.expired.map((value) => value.name).join(', ')})` : (item ? 'ยังไม่เข้าเทคนิค' : 'รอผล')));
+      const techniqueText = state.hits.length ? `✓ ถูกเทคนิค ${state.hits.map((value) => `${value.name} · จากรอบ ${String(value.sourceRound).padStart(3, '0')} · ตาม ${value.elapsed}/6`).join(' + ')}` : (state.signals.length ? `เข้า ${state.signals.map((signal) => signal.name).join(' + ')} · ตาม 6 รอบ` : (state.expired.length ? `ไม่เข้าเทคนิค · ครบ 6 รอบ (${state.expired.map((value) => value.name).join(', ')})` : (item ? 'ยังไม่เข้าเทคนิค' : 'รอผล')));
       const currentDetail = item ? `<div class="dialog-round-result"><div><small>ผลรอบ ${String(round).padStart(3, '0')}</small><b>บน ${analysisDigits(item.top_number, topKinds)} <i>·</i> ล่าง ${analysisDigits(item.bottom_number, bottomKinds)}</b></div><strong class="${state.hits.length ? 'hit' : (state.signals.length ? 'signal' : '')}">${techniqueText}</strong></div>` : `<div class="dialog-lot-status"><b>รอบ ${String(round).padStart(3, '0')} ยังไม่มีผล</b><span>ระบบจะแสดงการคำนวณอัตโนมัติเมื่อได้รับข้อมูลจาก LINE</span></div>`;
       const hitDetail = state.hits.length ? `<section class="dialog-hit-proof"><h4>ผลการทำนายก่อนหน้า · ถูกเทคนิค</h4>${state.hits.map((value) => `<p><b>${value.name}</b> จากรอบ ${String(value.sourceRound).padStart(3, '0')} ถูกเทคนิคที่ <strong>${value.matchedAt}</strong> ในรอบติดตาม ${value.elapsed}/6</p><p>ระบบเทียบแบบกลับตำแหน่ง จึงถือว่า 135 = 351 = 153 และ 23 = 32</p>${predictionDetail(value)}`).join('')}</section>` : '';
       const signalDetail = state.signals.length ? `<section class="dialog-calculation"><h4>การวิเคราะห์ทำนายรอบถัดไป</h4>${state.signals.map(predictionDetail).join('')}</section>` : (item ? '<p class="dialog-empty-note">รอบนี้ยังไม่เข้าเงื่อนไขของเทคนิคที่ตั้งไว้ จึงยังไม่สร้างชุดแนะนำใหม่</p>' : '');
@@ -375,6 +379,14 @@ function expandTwoDigitRows(number) {
   ];
 }
 
+function expandThreeToTwoRows(number) {
+  const digits = [...number];
+  return [[0, 1], [0, 2], [1, 2]].map(([firstIndex, secondIndex]) => {
+    const first = digits[firstIndex], second = digits[secondIndex];
+    return [first + second, first + pairMap[second], pairMap[first] + second, pairMap[first] + pairMap[second]];
+  });
+}
+
 const doubleNumbers = Array.from({ length: 10 }, (_, number) => `${number}${number}`);
 const jprNumbers = ['17', '71', '02', '20', '38', '83', '45', '54', '69', '96'];
 
@@ -484,8 +496,9 @@ function buildRoundOutput(top, bottom, groups, context = {}) {
   const ruleHtml = ruleRecommendationHtml(top, bottom);
   const techniques = independentTechniqueData(top, bottom, context);
   if (groups.length) {
-    techniques.topTargets.push(...expandJeeb(top));
-    techniques.bottomTargets.push(...expandTwoDigitRows(top.slice(-2)).flat());
+    const pairTargets = expandThreeToTwoRows(top).flat();
+    techniques.topTargets.push(...pairTargets);
+    techniques.bottomTargets.push(...pairTargets);
   }
   const summaryHtml = chanceSummaryHtml(top, bottom, techniques);
   if (!groups.length) return `<div class="round-output"><div class="round-message no-match"><b>คำแนะนำเลขจีบ:</b> ไม่พบเลข ${top} ในจีบเรียง — ไม่สร้างเลข จปล</div>${ruleHtml}${techniques.html}${summaryHtml}</div>`;
@@ -495,17 +508,12 @@ function buildRoundOutput(top, bottom, groups, context = {}) {
     const isGroupHit = groups.some((group) => group.index === index);
     return `<div class="compact-group ${isGroupHit ? 'hit-group' : ''}"><b>กลุ่ม ${index + 1} · ${base}</b><div>${variants.map((value) => `<i class="${numberSignature(value) === signature ? 'hit' : ''}">${value}</i>`).join('')}</div></div>`;
   }).join('');
-  const topLastTwo = top.slice(-2);
-  const twoDigitRows = expandTwoDigitRows(topLastTwo);
-  const threeDigitValues = expandJeeb(top);
-  const threeDigitRows = [threeDigitValues.slice(0, 4), threeDigitValues.slice(4)];
+  const twoDigitRows = expandThreeToTwoRows(top);
+  const twoDigitValues = twoDigitRows.flat();
   return `<div class="round-output">
     <div class="round-message"><b>คำแนะนำเลขจีบ:</b> พบเลข <strong>${top}</strong> ในจีบเรียง ${groups.length} กลุ่ม · ไฮไลต์ตัวที่ตรงแล้ว</div>
     <div class="compact-groups">${groupsHtml}</div>
-    <div class="round-jeeb">
-      <section class="calc-pattern-card"><header><span>จปล 3 หลัก</span><b>8 ตัว</b></header><p>เลขตั้งต้น <strong>${top}</strong> · สลับตามคู่ จปล ทีละหลัก</p>${threeDigitRows.map((row, index) => `<div class="pattern-row"><strong>แถว ${index + 1}</strong><div>${row.map((value) => `<i>${value}</i>`).join('')}</div></div>`).join('')}<small>ผลคำนวณ 3 หลัก · ${threeDigitValues.join(', ')}</small></section>
-      <section class="calc-pattern-card"><header><span>จปล 2 หลัก</span><b>4 ตัว</b></header><p>คำนวณจากเลข <strong>${twoDigitRows[0][0]}</strong></p>${twoDigitRows.map((row, index) => `<div class="pattern-row"><strong>แถว ${index + 1}</strong><div>${row.map((value) => `<i>${value}</i>`).join('')}</div></div>`).join('')}<small>ผลคำนวณ 2 หลัก · ${twoDigitRows.flat().join(', ')}</small></section>
-    </div>${ruleHtml}${techniques.html}${summaryHtml}
+    <div class="round-jeeb single"><section class="calc-pattern-card"><header><span>จีบเรียง → จปล 2 หลัก</span><b>12 ตัว</b></header><p>แปลงเลขตั้งต้น <strong>${top}</strong> เป็นคู่หลัก 1–2, 1–3 และ 2–3 แล้วสลับตามคู่ จปล</p>${twoDigitRows.map((row, index) => `<div class="pattern-row"><strong>แถว ${index + 1}</strong><div>${row.map((value) => `<i>${value}</i>`).join('')}</div></div>`).join('')}<small>ผลคำนวณ 12 คู่ · ${twoDigitValues.join(', ')} · ตรวจสองตัวท้ายบนและเลขล่าง โดยกลับตัวได้</small></section></div>${ruleHtml}${techniques.html}${summaryHtml}
   </div>`;
 }
 
@@ -650,12 +658,12 @@ function analyzeDailyRounds() {
     jeebTrackers.filter((tracker) => !tracker.resolved).forEach((tracker) => {
       const elapsed = index - tracker.start;
       if (elapsed < 1 || elapsed > 6) return;
-      const hit3 = tracker.three.includes(top);
-      const hit2 = tracker.two.includes(bottom);
-      if (hit3 || hit2) {
+      const hitTop = matchesAnyPermutation(top.slice(-2), tracker.two);
+      const hitBottom = matchesAnyPermutation(bottom, tracker.two);
+      if (hitTop || hitBottom) {
         tracker.resolved = true;
         row.classList.add('rule-won');
-        const matches = [hit3 ? `3 หลัก ${top}` : '', hit2 ? `2 หลัก ${bottom}` : ''].filter(Boolean).join(' + ');
+        const matches = [hitTop ? `สองตัวท้ายบน ${top.slice(-2)}` : '', hitBottom ? `2 ตัวล่าง ${bottom}` : ''].filter(Boolean).join(' + ');
         followMessages.push(`<span class="jeeb-follow hit"><b>จปล ถูกเทคนิค · <mark>${matches}</mark></b><small>คำนวณจากรอบ ${tracker.start + 1} · พบในรอบติดตาม ${elapsed}/6</small></span>`);
         hitReasons.push(`ถูกเทคนิค จปล: ${matches}`);
       } else {
@@ -701,11 +709,11 @@ function analyzeDailyRounds() {
     } else {
       row.classList.add('has-jeeb');
       const matchingValues = groups.flatMap((group) => group.hits);
-      const twoRows = expandTwoDigitRows(top.slice(-2));
-      jeebTrackers.push({ start: index, resolved: false, three: expandJeeb(top), two: twoRows.flat() });
+      const twoRows = expandThreeToTwoRows(top);
+      jeebTrackers.push({ start: index, resolved: false, two: twoRows.flat() });
       matchCell.innerHTML = `<span class="has-hit">พบ ${groups.map((group) => `กลุ่ม ${group.index + 1}`).join(', ')}</span>`;
       hitCell.innerHTML = matchingValues.map((value) => `<b>${value}</b>`).join(' ');
-      pairCell.innerHTML = `<span>${twoRows[0].join(', ')}</span><span>${twoRows[1].join(', ')}</span>`;
+      pairCell.innerHTML = twoRows.map((values, rowIndex) => `<span>แถว ${rowIndex + 1}: ${values.join(', ')}</span>`).join('');
       hitRounds.push({ round: index + 1, top, groups, matchingValues, twoRows });
     }
 
@@ -728,7 +736,7 @@ function analyzeDailyRounds() {
     ruleCell.innerHTML = triggerMessages.length ? triggerMessages.join('') : '<span class="rule-none">—</span>';
     followCell.innerHTML = followMessages.length ? followMessages.join('') : '<span class="rule-none">—</span>';
     const resultBlocks = [];
-    if (groups.length) resultBlocks.push(`<div class="result-block result-jeeb"><b>จีบเรียง · ${matchCell.innerText}</b><span>เลขที่ตรง ${hitCell.innerText}</span><small>จปล 2 หลัก: ${pairCell.innerText.replace(/\n/g, ' · ')}</small></div>`);
+    if (groups.length) resultBlocks.push(`<div class="result-block result-jeeb"><b>จีบเรียง · ${matchCell.innerText}</b><span>เลขที่ตรง ${hitCell.innerText}</span><small>แปลง 3 หลักเป็น จปล 2 หลัก 12 คู่: ${pairCell.innerText.replace(/\n/g, ' · ')}</small></div>`);
     if (triggerMessages.length) resultBlocks.push(`<div class="result-block result-rule">${triggerMessages.join('')}</div>`);
     if (followMessages.length) resultBlocks.push(`<div class="result-block result-follow">${followMessages.join('')}</div>`);
     const previousRow = allDailyRows[index - 1];
@@ -741,8 +749,9 @@ function analyzeDailyRounds() {
     };
     const techniques = independentTechniqueData(top, bottom, techniqueContext);
     if (groups.length) {
-      techniques.topTargets.push(...expandJeeb(top));
-      techniques.bottomTargets.push(...expandTwoDigitRows(top.slice(-2)).flat());
+      const pairTargets = expandThreeToTwoRows(top).flat();
+      techniques.topTargets.push(...pairTargets);
+      techniques.bottomTargets.push(...pairTargets);
     }
     if (techniques.html) resultBlocks.push(`<div class="result-block result-extra">${techniques.html}</div>`);
     if (techniques.count || triggerMessages.length) resultBlocks.push(`<div class="result-block result-summary">${chanceSummaryHtml(top, bottom, techniques)}</div>`);

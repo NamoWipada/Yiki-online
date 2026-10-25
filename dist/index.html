@@ -145,8 +145,8 @@
         <section class="technique-grid">
           <div class="color-legend"><b>สีผลวิเคราะห์</b><i class="lg-jeeb">จีบเรียง</i><i class="lg-jpl">จปล</i><i class="lg-sibling">พี่น้อง</i><i class="lg-same">รูซ้ำ</i><i class="lg-double">เบิ้ล</i><i class="lg-jpr">จปร.</i></div>
           <article class="tech-card jeeb"><span>01 · จีบเรียง</span><h3>ตรวจสมาชิกโดยไม่สนลำดับ</h3><p>เลข 3 ตัวถือว่าเป็นชุดเดียวกันแม้สลับตำแหน่ง เช่น <b>561 = 165 = 615</b> เมื่อพบให้ไฮไลต์กลุ่มที่ตรง</p><div class="tech-example">กลุ่มตั้งต้น: 089 · 567 · 243 · 190 · 789</div></article>
-          <article class="tech-card jpl"><span>02 · จปล 3 หลัก</span><h3>เลขตั้งต้น 1 ชุด → 8 ตัว</h3><p>สลับแต่ละหลักตามคู่ จปล <b>0↔2, 1↔7, 3↔8, 4↔5, 6↔9</b></p><div class="tech-example">756 → 756, 759, 746, 749, 156, 159, 146, 149</div></article>
-          <article class="tech-card jpl"><span>03 · จปล 2 หลัก</span><h3>เลขตั้งต้น 1 คู่ → 4 ตัว</h3><p>แสดงเป็น 2 แถวตามแพทเทิร์นเดียวกับ 3 หลัก</p><div class="tech-example">85 → แถว 1: 35, 34 · แถว 2: 85, 84</div></article>
+          <article class="tech-card jpl"><span>02 · จีบเรียง → จปล 12 คู่</span><h3>แปลงเลข 3 หลักเป็นเลข 2 หลัก</h3><p>จับคู่หลัก 1–2, 1–3 และ 2–3 แล้วสลับแต่ละหลักตามคู่ จปล <b>0↔2, 1↔7, 3↔8, 4↔5, 6↔9</b></p><div class="tech-example">243 → 24,25,04,05 / 23,28,03,08 / 43,48,53,58</div></article>
+          <article class="tech-card jpl"><span>03 · วิธีตรวจผล</span><h3>ตรวจสองตัวท้ายบนและเลขล่าง</h3><p>นำคู่ทำนายทั้ง 12 ตัวไปเทียบกับหลักสิบ–หน่วยของเลขบนและเลขล่างภายใน 6 รอบ โดยกลับตัวได้</p><div class="tech-example">ทำนาย 24 → ผล 24 หรือ 42 ถือว่าถูกเทคนิค</div></article>
           <article class="tech-card sibling"><span>04 · RULE เทคนิค 1</span><h3>สัญญาณพี่น้อง</h3><div class="rule-position"><b>บน 50<mark>6</mark></b><i>เทียบ</i><b>ล่าง <mark>5</mark>8</b></div><p>เลขห่างกัน 1 ขั้น รวมคู่ 0–9 จากนั้นติดตามไม่เกิน 6 รอบเพื่อหา <b>เลขเบิ้ลหรือ จปร.</b></p></article>
           <article class="tech-card same"><span>05 · RULE เทคนิค 2</span><h3>สัญญาณรูซ้ำ</h3><div class="rule-position"><b>บน 62<mark>7</mark></b><i>เทียบ</i><b>ล่าง <mark>7</mark>7</b></div><p>เลขตำแหน่งที่เทียบเป็นตัวเดียวกัน จากนั้นติดตามไม่เกิน 6 รอบเพื่อหา <b>พี่น้องในสองตัวท้ายบนหรือล่าง</b></p></article>
           <article class="tech-card target"><span>06 · เลขเป้าหมาย RULE</span><h3>เบิ้ลและ จปร.</h3><p><b>เบิ้ล:</b> 00, 11, 22, 33, 44, 55, 66, 77, 88, 99</p><p><b>จปร.:</b> 17/71, 02/20, 38/83, 45/54, 69/96</p><div class="tech-example">ติดตามสูงสุด 6 รอบ · เกินกำหนดถือว่าไม่ถูกและไม่เข้าเทคนิค</div></article>
@@ -159,6 +159,6 @@
   </div>
   <dialog class="analysis-dialog" id="analysisDialog"><div class="dialog-head"><div><p class="eyebrow">ANALYSIS DETAIL</p><h3 id="analysisDialogTitle">รายละเอียดการวิเคราะห์</h3></div><button id="closeAnalysisDialog" type="button" aria-label="ปิด">×</button></div><div id="analysisDialogBody"></div></dialog>
   <script src="./mock-264.js?v=10"></script>
-  <script src="./app.js?v=16"></script>
+  <script src="./app.js?v=17"></script>
 </body>
 </html>
