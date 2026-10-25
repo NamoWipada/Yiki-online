@@ -80,13 +80,20 @@ async function saveLineEvents(payload, env) {
 
     const placeholders = parsedRows.map(() => "?").join(",");
     const existing = await env.DB.prepare(
-      `SELECT round_no FROM group_daily_results WHERE draw_date = ? AND source_id = ? AND round_no IN (${placeholders})`
+      `SELECT round_no, draw_time, top_number, bottom_number FROM group_daily_results WHERE draw_date = ? AND source_id = ? AND round_no IN (${placeholders})`
     ).bind(drawDate, source.id, ...parsedRows.map((row) => row.roundNo)).all();
-    const existingRounds = new Set(existing.results.map((row) => Number(row.round_no)));
-    const inserted = parsedRows.filter((row) => !existingRounds.has(row.roundNo)).length;
-    const updated = parsedRows.length - inserted;
+    const existingByRound = new Map(existing.results.map((row) => [Number(row.round_no), row]));
+    const newRows = parsedRows.filter((row) => !existingByRound.has(row.roundNo));
+    const changedRows = parsedRows.filter((row) => {
+      const old = existingByRound.get(row.roundNo);
+      return old && (old.draw_time !== row.time || old.top_number !== row.top || old.bottom_number !== row.bottom);
+    });
+    const rowsToSave = [...newRows, ...changedRows];
+    const inserted = newRows.length;
+    const updated = changedRows.length;
+    const ignored = parsedRows.length - rowsToSave.length;
 
-    const statements = parsedRows.map((parsed) => env.DB.prepare(
+    const statements = rowsToSave.map((parsed) => env.DB.prepare(
       `INSERT INTO group_daily_results
        (draw_date, source_id, round_no, draw_time, top_number, bottom_number, source_text, event_id, occurred_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -102,12 +109,13 @@ async function saveLineEvents(payload, env) {
     statements.push(env.DB.prepare(
       `INSERT INTO webhook_receipts
        (event_id, source_id, draw_date, received_rows, inserted_rows, updated_rows, ignored_rows, occurred_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
-    ).bind(eventId, source.id, drawDate, parsedRows.length, inserted, updated, occurredAt));
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(eventId, source.id, drawDate, parsedRows.length, inserted, updated, ignored, occurredAt));
     await env.DB.batch(statements);
     summary.accepted += parsedRows.length;
     summary.inserted += inserted;
     summary.updated += updated;
+    summary.ignored += ignored;
     if (!summary.sources.some((item) => item.id === source.id)) summary.sources.push(source);
   }
   return summary;

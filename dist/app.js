@@ -63,7 +63,7 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     document.getElementById('realtimeStatus').textContent = results.length ? `อัปเดตแล้ว ${results.length} จาก 214 รอบ` : 'วันนี้ยังไม่มีผลส่งเข้ามา';
     message.className = 'sync-message success';
     const receipt = payload.last_receipt;
-    const receiptText = receipt ? ` · ข้อความล่าสุด: ใหม่ ${receipt.inserted_rows} / ซ้ำหรืออัปเดต ${receipt.updated_rows}` : '';
+    const receiptText = receipt ? ` · ข้อความล่าสุด: ใหม่ ${receipt.inserted_rows} / แก้ไข ${receipt.updated_rows} / ซ้ำ ${receipt.ignored_rows}` : '';
     message.querySelector('span').textContent = `ซิงก์ล่าสุด ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}${receiptText}`;
     remaining = 30;
   } catch (error) {
