@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css?v=10" />
   <link rel="stylesheet" href="./enhancements.css?v=11" />
-  <link rel="stylesheet" href="./realtime-template.css?v=3" />
+  <link rel="stylesheet" href="./realtime-template.css?v=4" />
 </head>
 <body>
   <div class="shell">
@@ -95,7 +95,7 @@
         <div class="analysis-hero"><div><p class="eyebrow">LIVE TECHNIQUE ANALYSIS</p><h2>สรุปการวิเคราะห์ตามล็อต</h2><p>ดึงผลจาก LINE/D1 แบ่งล็อตละ 4 รอบ ตรวจเลขแบบกลับตำแหน่งได้ และหยุดติดตามทันทีเมื่อเข้าเป้าในล็อต</p></div><button id="refreshAnalysis" type="button">คำนวณข้อมูลล่าสุด ↻</button></div>
         <div class="analysis-summary-strip"><div><span>วันที่วิเคราะห์</span><strong id="analysisDate">—</strong></div><div><span>ข้อมูลทั้งหมด</span><strong id="analysisFilled">0 / 264</strong></div><div><span>ล็อตที่เข้าเทคนิค</span><strong id="analysisTriggered">0</strong></div><div><span>ล็อตที่เข้าเป้า</span><strong id="analysisPassed">0</strong></div></div>
         <div class="analysis-legend"><span><i class="signal"></i> สีสัญญาณ: ตำแหน่งที่เข้าเทคนิค</span><span><i class="success"></i> สีผลลัพธ์: เลขที่ทำนายถูก (สลับตำแหน่งได้)</span></div>
-        <section class="analysis-lot-grid" id="analysisLotGrid"><p class="analysis-empty">กำลังรอข้อมูลจากหน้าเรียลไทม์</p></section>
+        <section class="analysis-lot-grid analysis-table-shell" id="analysisLotGrid"><p class="analysis-empty">กำลังรอข้อมูลจากหน้าเรียลไทม์</p></section>
       </section>
 
       <section class="page" id="three">
@@ -159,6 +159,6 @@
   </div>
   <dialog class="analysis-dialog" id="analysisDialog"><div class="dialog-head"><div><p class="eyebrow">ANALYSIS DETAIL</p><h3 id="analysisDialogTitle">รายละเอียดการวิเคราะห์</h3></div><button id="closeAnalysisDialog" type="button" aria-label="ปิด">×</button></div><div id="analysisDialogBody"></div></dialog>
   <script src="./mock-264.js?v=10"></script>
-  <script src="./app.js?v=14"></script>
+  <script src="./app.js?v=15"></script>
 </body>
 </html>

@@ -104,12 +104,25 @@ function predictionsFromRound(item, roundInLot) {
   return predictions;
 }
 
+function predictionDetail(prediction) {
+  const topTargets = prediction.top?.length ? prediction.top.join(', ') : '—';
+  const bottomTargets = prediction.bottom?.length ? prediction.bottom.join(', ') : '—';
+  const steps = {
+    jeeb: 'ตรวจเลข 3 ตัวแบบไม่สนลำดับ → ระบุกลุ่มจีบเรียง → สลับคู่ จปล เพื่อสร้างชุดติดตาม',
+    sibling: 'เปรียบเทียบหลักหน่วยบนกับหลักสิบล่าง → ต่างกัน 1 ขั้น → ติดตามเลขเบิ้ลหรือ จปร.',
+    same: 'เปรียบเทียบหลักหน่วยบนกับหลักสิบล่าง → เป็นเลขเดียวกัน → ติดตามเลขพี่น้อง',
+    hunt: 'พบคู่สัญญาณ 33, 88, 38 หรือ 83 → ติดตามคู่ 43, 48, 53, 58',
+    running: 'นำหลักหน่วยบนต่อกับเลขล่างของรอบแรก → สลับคู่ จปล ครบชุด',
+  };
+  return `<article class="dialog-tech-card ${prediction.tone}"><header><b>${prediction.name}</b><span>เริ่มจากรอบ ${String(prediction.sourceRound).padStart(3, '0')}</span></header><p><strong>เหตุผลที่เข้าเทคนิค:</strong> ${prediction.note}</p><p><strong>วิธีคำนวณ:</strong> ${steps[prediction.tone] || 'ตรวจตามเงื่อนไขของเทคนิค'}</p><div class="dialog-target-grid"><div><small>ชุดเป้าหมาย 3 หลัก</small><b>${topTargets}</b></div><div><small>ชุดเป้าหมาย 2 หลัก</small><b>${bottomTargets}</b></div></div></article>`;
+}
+
 function renderAnalysisDashboard() {
   const grid = document.getElementById('analysisLotGrid');
   if (!grid) return;
   const byRound = new Map(realtimeResults.map((item) => [Number(item.round_no), item]));
   let triggeredLots = 0, passedLots = 0;
-  const cards = [];
+  const rows = [];
   for (let lot = 1; lot <= 66; lot += 1) {
     const start = (lot - 1) * 4 + 1;
     const items = Array.from({ length: 4 }, (_, offset) => byRound.get(start + offset) || null);
@@ -136,21 +149,26 @@ function renderAnalysisDashboard() {
     if (hasSignal) triggeredLots += 1;
     if (passed) passedLots += 1;
     const status = passed ? 'passed' : (hasSignal ? 'tracking' : 'quiet');
-    const rows = items.map((item, offset) => {
+    items.forEach((item, offset) => {
       const round = start + offset, state = roundStates[offset];
       const signalPositions = item ? analysisSignalPositions(item, state.signals) : { top: [], bottom: [] };
       const topKinds = state.hit ? (state.hit.matchedAt.startsWith('3 ตัวบน') ? ['result-hit','result-hit','result-hit'] : (state.hit.matchedAt.startsWith('สองตัวท้าย') ? ['', 'result-hit','result-hit'] : ['', '', ''])) : signalPositions.top;
       const bottomKinds = state.hit?.matchedAt.startsWith('2 ตัวล่าง') ? ['result-hit','result-hit'] : signalPositions.bottom;
-      return `<div class="analysis-round ${state.hit ? 'is-hit' : ''} ${state.signals.length ? 'has-signal' : ''}"><span>${String(round).padStart(3, '0')}</span><b>${item ? analysisDigits(item.top_number, topKinds) : '— — —'}</b><b>${item ? analysisDigits(item.bottom_number, bottomKinds) : '— —'}</b><em>${state.hit ? '✓ ถูก' : (state.signals.length ? 'เข้าเทคนิค' : (item ? '—' : 'รอผล'))}</em></div>`;
-    }).join('');
-    const detail = `<div class="dialog-lot-status ${status}"><b>${passed ? '✓ ล็อตนี้ทำนายถูก' : (hasSignal ? 'กำลังติดตาม แต่ยังไม่เข้าเป้า' : 'ยังไม่มีสัญญาณ')}</b><span>ตรวจแบบสลับตำแหน่งทั้งหมด เช่น 135 = 351 และ 23 = 32</span></div>${events.length ? events.map((event) => `<div class="dialog-event ${event.type}"><b>รอบ ${event.round}</b><span>${event.text}</span></div>`).join('') : '<p>ยังไม่มีรายละเอียดการวิเคราะห์</p>'}`;
-    cards.push(`<article class="analysis-lot-card ${status}"><header><div><span>ล็อต ${String(lot).padStart(2, '0')}</span><small>รอบ ${start}–${start + 3}</small></div><strong>${passed ? 'ผ่าน' : (hasSignal ? 'ติดตาม' : 'ไม่มีสัญญาณ')}</strong></header><div class="analysis-round-head"><span>รอบ</span><span>3 ตัวบน</span><span>2 ตัวล่าง</span><span>ผล</span></div>${rows}<button class="analysis-more" type="button" data-title="ล็อต ${String(lot).padStart(2, '0')} · รอบ ${start}–${start + 3}" data-detail="${encodeURIComponent(detail)}">ดูเพิ่มเติม</button></article>`);
+      const techniqueText = state.hit ? `✓ ถูกด้วย ${state.hit.name}` : (state.signals.length ? `เข้า ${state.signals.map((signal) => signal.name).join(' + ')}` : (item ? 'ยังไม่เข้าเทคนิค' : 'รอผล'));
+      const currentDetail = item ? `<div class="dialog-round-result"><div><small>ผลรอบ ${String(round).padStart(3, '0')}</small><b>บน ${analysisDigits(item.top_number, topKinds)} <i>·</i> ล่าง ${analysisDigits(item.bottom_number, bottomKinds)}</b></div><strong class="${state.hit ? 'hit' : (state.signals.length ? 'signal' : '')}">${techniqueText}</strong></div>` : `<div class="dialog-lot-status"><b>รอบ ${String(round).padStart(3, '0')} ยังไม่มีผล</b><span>ระบบจะแสดงการคำนวณอัตโนมัติเมื่อได้รับข้อมูลจาก LINE</span></div>`;
+      const hitDetail = state.hit ? `<section class="dialog-hit-proof"><h4>ผลการทำนายก่อนหน้า</h4><p><b>${state.hit.name}</b> จากรอบ ${String(state.hit.sourceRound).padStart(3, '0')} ทำนายถูกที่ <strong>${state.hit.matchedAt}</strong></p><p>ระบบเทียบแบบกลับตำแหน่ง จึงถือว่า 135 = 351 = 153 และ 23 = 32</p>${predictionDetail(state.hit)}</section>` : '';
+      const signalDetail = state.signals.length ? `<section class="dialog-calculation"><h4>การวิเคราะห์ทำนายรอบถัดไป</h4>${state.signals.map(predictionDetail).join('')}</section>` : (item ? '<p class="dialog-empty-note">รอบนี้ยังไม่เข้าเงื่อนไขของเทคนิคที่ตั้งไว้ จึงยังไม่สร้างชุดแนะนำใหม่</p>' : '');
+      const lotTimeline = events.length ? `<section class="dialog-timeline"><h4>ลำดับเหตุการณ์ของล็อต ${String(lot).padStart(2, '0')}</h4>${events.map((event) => `<div class="dialog-event ${event.type}"><b>รอบ ${String(event.round).padStart(3, '0')}</b><span>${event.text}</span></div>`).join('')}</section>` : '';
+      const detail = `${currentDetail}${hitDetail}${signalDetail}${lotTimeline}`;
+      rows.push({ round, item, lot, status, state, topKinds, bottomKinds, techniqueText, detail });
+    });
   }
   document.getElementById('analysisDate').textContent = realtimePayload?.draw_date || realtimeDateInput.value || '—';
   document.getElementById('analysisFilled').textContent = `${realtimeResults.length} / 264`;
   document.getElementById('analysisTriggered').textContent = triggeredLots;
   document.getElementById('analysisPassed').textContent = passedLots;
-  grid.innerHTML = cards.join('');
+  const ordered = [...rows.filter((row) => row.item).sort((a, b) => b.round - a.round), ...rows.filter((row) => !row.item).sort((a, b) => a.round - b.round)];
+  grid.innerHTML = `<div class="analysis-long-table"><table><thead><tr><th>ล็อต</th><th>รอบ</th><th>เวลา</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สรุปผลวิเคราะห์</th><th>รายละเอียด</th></tr></thead><tbody>${ordered.map((row) => `<tr class="${row.state.hit ? 'is-hit' : ''} ${row.state.signals.length ? 'has-signal' : ''} ${row.item ? '' : 'is-waiting'}"><td><span class="lot-pill">ล็อต ${String(row.lot).padStart(2, '0')}</span></td><td><b>${String(row.round).padStart(3, '0')}</b></td><td>${row.item?.draw_time || '—'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.top_number, row.topKinds) : '— — —'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.bottom_number, row.bottomKinds) : '— —'}</td><td><span class="analysis-row-summary">${row.techniqueText}</span></td><td><button class="analysis-more" type="button" data-title="ล็อต ${String(row.lot).padStart(2, '0')} · รอบ ${String(row.round).padStart(3, '0')}" data-detail="${encodeURIComponent(row.detail)}">ดูเพิ่มเติม</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function openAnalysisDialog(title, html) {
