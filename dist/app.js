@@ -121,46 +121,59 @@ function renderAnalysisDashboard() {
   const grid = document.getElementById('analysisLotGrid');
   if (!grid) return;
   const byRound = new Map(realtimeResults.map((item) => [Number(item.round_no), item]));
-  let triggeredLots = 0, passedLots = 0;
+  const roundStates = Array.from({ length: 264 }, () => ({ signals: [], hits: [], expired: [] }));
+  const lotEvents = Array.from({ length: 66 }, () => []);
+  let active = [];
+  for (let round = 1; round <= 264; round += 1) {
+    const item = byRound.get(round);
+    if (!item) continue;
+    const state = roundStates[round - 1];
+    const eligible = active.filter((prediction) => round - prediction.sourceRound >= 1 && round - prediction.sourceRound <= 6);
+    state.hits = eligible.filter((prediction) => matchesAnyPermutation(item.top_number, prediction.top) || matchesAnyPermutation(item.top_number.slice(-2), prediction.bottom) || matchesAnyPermutation(item.bottom_number, prediction.bottom)).map((prediction) => {
+      const matchedAt = matchesAnyPermutation(item.top_number, prediction.top) ? `3 ตัวบน ${item.top_number}` : (matchesAnyPermutation(item.top_number.slice(-2), prediction.bottom) ? `สองตัวท้ายบน ${item.top_number.slice(-2)}` : `2 ตัวล่าง ${item.bottom_number}`);
+      return { ...prediction, matchedAt, elapsed: round - prediction.sourceRound };
+    });
+    const hitKeys = new Set(state.hits.map((hit) => `${hit.sourceRound}:${hit.name}`));
+    active = active.filter((prediction) => !hitKeys.has(`${prediction.sourceRound}:${prediction.name}`));
+    state.hits.forEach((hit) => lotEvents[Math.ceil(round / 4) - 1].push({ type: 'hit', round, text: `${hit.name} ถูกเทคนิคที่ ${hit.matchedAt} ในรอบติดตาม ${hit.elapsed}/6` }));
+    const expiring = active.filter((prediction) => round - prediction.sourceRound === 6);
+    state.expired.push(...expiring);
+    expiring.forEach((prediction) => lotEvents[Math.ceil(round / 4) - 1].push({ type: 'expired', round, text: `${prediction.name} จากรอบ ${prediction.sourceRound} ครบ 6 รอบแล้วไม่เข้าเทคนิค` }));
+    active = active.filter((prediction) => round - prediction.sourceRound < 6);
+    const roundInLot = ((round - 1) % 4) + 1;
+    state.signals = predictionsFromRound(item, roundInLot).map((prediction) => ({ ...prediction, sourceRound: round, expiresAt: Math.min(round + 6, 264) }));
+    active.push(...state.signals);
+    state.signals.forEach((signal) => lotEvents[Math.ceil(round / 4) - 1].push({ type: 'signal', round, text: `${signal.name}: ${signal.note} · ติดตามรอบ ${round + 1}–${signal.expiresAt}` }));
+  }
+  const triggeredLotSet = new Set();
+  const passedLotSet = new Set();
+  roundStates.forEach((state, index) => {
+    if (state.signals.length) triggeredLotSet.add(Math.ceil((index + 1) / 4));
+    if (state.hits.length) passedLotSet.add(Math.ceil((index + 1) / 4));
+  });
+  const triggeredLots = triggeredLotSet.size, passedLots = passedLotSet.size;
   const rows = [];
   for (let lot = 1; lot <= 66; lot += 1) {
     const start = (lot - 1) * 4 + 1;
     const items = Array.from({ length: 4 }, (_, offset) => byRound.get(start + offset) || null);
-    const events = [], roundStates = Array.from({ length: 4 }, () => ({ signals: [], hit: null }));
-    let active = [], passed = false;
-    for (let offset = 0; offset < 4; offset += 1) {
-      const item = items[offset];
-      if (!item || passed) continue;
-      const hit = active.find((prediction) => matchesAnyPermutation(item.top_number, prediction.top) || matchesAnyPermutation(item.top_number.slice(-2), prediction.bottom) || matchesAnyPermutation(item.bottom_number, prediction.bottom));
-      if (hit) {
-        const matchedAt = matchesAnyPermutation(item.top_number, hit.top) ? `3 ตัวบน ${item.top_number}` : (matchesAnyPermutation(item.top_number.slice(-2), hit.bottom) ? `สองตัวท้ายบน ${item.top_number.slice(-2)}` : `2 ตัวล่าง ${item.bottom_number}`);
-        roundStates[offset].hit = { ...hit, matchedAt };
-        events.push({ type: 'hit', round: start + offset, text: `${hit.name} เข้าเป้าที่ ${matchedAt}` });
-        passed = true;
-        active = [];
-        continue;
-      }
-      const signals = predictionsFromRound(item, offset + 1).map((prediction) => ({ ...prediction, sourceRound: start + offset }));
-      roundStates[offset].signals = signals;
-      active.push(...signals);
-      signals.forEach((signal) => events.push({ type: 'signal', round: start + offset, text: `${signal.name}: ${signal.note}` }));
-    }
+    const events = lotEvents[lot - 1];
     const hasSignal = events.some((event) => event.type === 'signal');
-    if (hasSignal) triggeredLots += 1;
-    if (passed) passedLots += 1;
+    const passed = events.some((event) => event.type === 'hit');
     const status = passed ? 'passed' : (hasSignal ? 'tracking' : 'quiet');
     items.forEach((item, offset) => {
-      const round = start + offset, state = roundStates[offset];
+      const round = start + offset, state = roundStates[round - 1];
+      const hit = state.hits[0] || null;
       const signalPositions = item ? analysisSignalPositions(item, state.signals) : { top: [], bottom: [] };
-      const topKinds = state.hit ? (state.hit.matchedAt.startsWith('3 ตัวบน') ? ['result-hit','result-hit','result-hit'] : (state.hit.matchedAt.startsWith('สองตัวท้าย') ? ['', 'result-hit','result-hit'] : ['', '', ''])) : signalPositions.top;
-      const bottomKinds = state.hit?.matchedAt.startsWith('2 ตัวล่าง') ? ['result-hit','result-hit'] : signalPositions.bottom;
-      const techniqueText = state.hit ? `✓ ถูกด้วย ${state.hit.name}` : (state.signals.length ? `เข้า ${state.signals.map((signal) => signal.name).join(' + ')}` : (item ? 'ยังไม่เข้าเทคนิค' : 'รอผล'));
-      const currentDetail = item ? `<div class="dialog-round-result"><div><small>ผลรอบ ${String(round).padStart(3, '0')}</small><b>บน ${analysisDigits(item.top_number, topKinds)} <i>·</i> ล่าง ${analysisDigits(item.bottom_number, bottomKinds)}</b></div><strong class="${state.hit ? 'hit' : (state.signals.length ? 'signal' : '')}">${techniqueText}</strong></div>` : `<div class="dialog-lot-status"><b>รอบ ${String(round).padStart(3, '0')} ยังไม่มีผล</b><span>ระบบจะแสดงการคำนวณอัตโนมัติเมื่อได้รับข้อมูลจาก LINE</span></div>`;
-      const hitDetail = state.hit ? `<section class="dialog-hit-proof"><h4>ผลการทำนายก่อนหน้า</h4><p><b>${state.hit.name}</b> จากรอบ ${String(state.hit.sourceRound).padStart(3, '0')} ทำนายถูกที่ <strong>${state.hit.matchedAt}</strong></p><p>ระบบเทียบแบบกลับตำแหน่ง จึงถือว่า 135 = 351 = 153 และ 23 = 32</p>${predictionDetail(state.hit)}</section>` : '';
+      const topKinds = hit ? (hit.matchedAt.startsWith('3 ตัวบน') ? ['result-hit','result-hit','result-hit'] : (hit.matchedAt.startsWith('สองตัวท้าย') ? ['', 'result-hit','result-hit'] : ['', '', ''])) : signalPositions.top;
+      const bottomKinds = hit?.matchedAt.startsWith('2 ตัวล่าง') ? ['result-hit','result-hit'] : signalPositions.bottom;
+      const techniqueText = state.hits.length ? `✓ ถูกเทคนิค ${state.hits.map((value) => value.name).join(' + ')}` : (state.signals.length ? `เข้า ${state.signals.map((signal) => signal.name).join(' + ')} · ตาม 6 รอบ` : (state.expired.length ? `ไม่เข้าเทคนิค · ครบ 6 รอบ (${state.expired.map((value) => value.name).join(', ')})` : (item ? 'ยังไม่เข้าเทคนิค' : 'รอผล')));
+      const currentDetail = item ? `<div class="dialog-round-result"><div><small>ผลรอบ ${String(round).padStart(3, '0')}</small><b>บน ${analysisDigits(item.top_number, topKinds)} <i>·</i> ล่าง ${analysisDigits(item.bottom_number, bottomKinds)}</b></div><strong class="${state.hits.length ? 'hit' : (state.signals.length ? 'signal' : '')}">${techniqueText}</strong></div>` : `<div class="dialog-lot-status"><b>รอบ ${String(round).padStart(3, '0')} ยังไม่มีผล</b><span>ระบบจะแสดงการคำนวณอัตโนมัติเมื่อได้รับข้อมูลจาก LINE</span></div>`;
+      const hitDetail = state.hits.length ? `<section class="dialog-hit-proof"><h4>ผลการทำนายก่อนหน้า · ถูกเทคนิค</h4>${state.hits.map((value) => `<p><b>${value.name}</b> จากรอบ ${String(value.sourceRound).padStart(3, '0')} ถูกเทคนิคที่ <strong>${value.matchedAt}</strong> ในรอบติดตาม ${value.elapsed}/6</p><p>ระบบเทียบแบบกลับตำแหน่ง จึงถือว่า 135 = 351 = 153 และ 23 = 32</p>${predictionDetail(value)}`).join('')}</section>` : '';
       const signalDetail = state.signals.length ? `<section class="dialog-calculation"><h4>การวิเคราะห์ทำนายรอบถัดไป</h4>${state.signals.map(predictionDetail).join('')}</section>` : (item ? '<p class="dialog-empty-note">รอบนี้ยังไม่เข้าเงื่อนไขของเทคนิคที่ตั้งไว้ จึงยังไม่สร้างชุดแนะนำใหม่</p>' : '');
+      const expiredDetail = state.expired.length ? `<section class="dialog-expired"><h4>รายการที่ตัดจบในรอบนี้</h4>${state.expired.map((value) => `<p><b>${value.name}</b> จากรอบ ${String(value.sourceRound).padStart(3, '0')} ตรวจครบ 6 รอบแล้วไม่พบผล จึงถือว่า <strong>เทคนิคนั้นไม่ถูก / ไม่เข้า</strong></p>`).join('')}</section>` : '';
       const lotTimeline = events.length ? `<section class="dialog-timeline"><h4>ลำดับเหตุการณ์ของล็อต ${String(lot).padStart(2, '0')}</h4>${events.map((event) => `<div class="dialog-event ${event.type}"><b>รอบ ${String(event.round).padStart(3, '0')}</b><span>${event.text}</span></div>`).join('')}</section>` : '';
-      const detail = `${currentDetail}${hitDetail}${signalDetail}${lotTimeline}`;
-      rows.push({ round, item, lot, status, state, topKinds, bottomKinds, techniqueText, detail });
+      const detail = `${currentDetail}${hitDetail}${signalDetail}${expiredDetail}${lotTimeline}`;
+      rows.push({ round, item, lot, status, state: { ...state, hit }, topKinds, bottomKinds, techniqueText, detail });
     });
   }
   document.getElementById('analysisDate').textContent = realtimePayload?.draw_date || realtimeDateInput.value || '—';
@@ -168,7 +181,7 @@ function renderAnalysisDashboard() {
   document.getElementById('analysisTriggered').textContent = triggeredLots;
   document.getElementById('analysisPassed').textContent = passedLots;
   const ordered = [...rows.filter((row) => row.item).sort((a, b) => b.round - a.round), ...rows.filter((row) => !row.item).sort((a, b) => a.round - b.round)];
-  grid.innerHTML = `<div class="analysis-long-table"><table><thead><tr><th>ล็อต</th><th>รอบ</th><th>เวลา</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สรุปผลวิเคราะห์</th><th>รายละเอียด</th></tr></thead><tbody>${ordered.map((row) => `<tr class="${row.state.hit ? 'is-hit' : ''} ${row.state.signals.length ? 'has-signal' : ''} ${row.item ? '' : 'is-waiting'}"><td><span class="lot-pill">ล็อต ${String(row.lot).padStart(2, '0')}</span></td><td><b>${String(row.round).padStart(3, '0')}</b></td><td>${row.item?.draw_time || '—'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.top_number, row.topKinds) : '— — —'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.bottom_number, row.bottomKinds) : '— —'}</td><td><span class="analysis-row-summary">${row.techniqueText}</span></td><td><button class="analysis-more" type="button" data-title="ล็อต ${String(row.lot).padStart(2, '0')} · รอบ ${String(row.round).padStart(3, '0')}" data-detail="${encodeURIComponent(row.detail)}">ดูเพิ่มเติม</button></td></tr>`).join('')}</tbody></table></div>`;
+  grid.innerHTML = `<div class="analysis-long-table"><table><thead><tr><th>ล็อต</th><th>รอบ</th><th>เวลา</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สรุปผลวิเคราะห์</th><th>รายละเอียด</th></tr></thead><tbody>${ordered.map((row) => `<tr class="${row.state.hits.length ? 'is-hit' : ''} ${row.state.signals.length ? 'has-signal' : ''} ${row.item ? '' : 'is-waiting'}"><td><span class="lot-pill">ล็อต ${String(row.lot).padStart(2, '0')}</span></td><td><b>${String(row.round).padStart(3, '0')}</b></td><td>${row.item?.draw_time || '—'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.top_number, row.topKinds) : '— — —'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.bottom_number, row.bottomKinds) : '— —'}</td><td><span class="analysis-row-summary">${row.techniqueText}</span></td><td><button class="analysis-more" type="button" data-title="ล็อต ${String(row.lot).padStart(2, '0')} · รอบ ${String(row.round).padStart(3, '0')}" data-detail="${encodeURIComponent(row.detail)}">ดูเพิ่มเติม</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function openAnalysisDialog(title, html) {
@@ -387,8 +400,8 @@ function comparedDigitsHtml(top, bottom) {
 function ruleRecommendationHtml(top, bottom) {
   const trigger = ruleTrigger(top, bottom);
   const blocks = [];
-  if (trigger.trick1) blocks.push(`<div class="rule-tip t1"><b>RULE เทคนิค 1 · พี่น้อง ${top[2]}–${bottom[0]}</b><div class="rule-digit-view">${comparedDigitsHtml(top, bottom)}</div><span>ตาม 4 รอบถัดไป: เลขเบิ้ล หรือเลข จปร.</span><small>เบิ้ล ${doubleNumbers.join(', ')}<br>จปร. ${jprNumbers.join(', ')}</small></div>`);
-  if (trigger.trick2) blocks.push(`<div class="rule-tip t2"><b>RULE เทคนิค 2 · รูซ้ำ ${top[2]}–${bottom[0]}</b><div class="rule-digit-view">${comparedDigitsHtml(top, bottom)}</div><span>ตาม 4 รอบถัดไป: พี่น้องใน 2 ตัวท้ายบน หรือ 2 ตัวล่าง</span></div>`);
+  if (trigger.trick1) blocks.push(`<div class="rule-tip t1"><b>RULE เทคนิค 1 · พี่น้อง ${top[2]}–${bottom[0]}</b><div class="rule-digit-view">${comparedDigitsHtml(top, bottom)}</div><span>ตามไม่เกิน 6 รอบถัดไป: เลขเบิ้ล หรือเลข จปร.</span><small>เบิ้ล ${doubleNumbers.join(', ')}<br>จปร. ${jprNumbers.join(', ')}</small></div>`);
+  if (trigger.trick2) blocks.push(`<div class="rule-tip t2"><b>RULE เทคนิค 2 · รูซ้ำ ${top[2]}–${bottom[0]}</b><div class="rule-digit-view">${comparedDigitsHtml(top, bottom)}</div><span>ตามไม่เกิน 6 รอบถัดไป: พี่น้องใน 2 ตัวท้ายบน หรือ 2 ตัวล่าง</span></div>`);
   return blocks.length ? `<div class="rule-recommendation"><strong>คำแนะนำ RULE</strong><p class="rule-compare">เทียบหน่วยบน ${top[2]} ↔ สิบล่าง ${bottom[0]}</p>${blocks.join('')}</div>` : `<div class="rule-recommendation quiet"><strong>คำแนะนำ RULE</strong><span>เทียบหน่วยบน ${top[2]} ↔ สิบล่าง ${bottom[0]} · รอบนี้ยังไม่เป็นพี่น้องหรือรูซ้ำ</span></div>`;
 }
 
@@ -636,24 +649,24 @@ function analyzeDailyRounds() {
     const hitReasons = [];
     jeebTrackers.filter((tracker) => !tracker.resolved).forEach((tracker) => {
       const elapsed = index - tracker.start;
-      if (elapsed < 1 || elapsed > 4) return;
+      if (elapsed < 1 || elapsed > 6) return;
       const hit3 = tracker.three.includes(top);
       const hit2 = tracker.two.includes(bottom);
       if (hit3 || hit2) {
         tracker.resolved = true;
         row.classList.add('rule-won');
         const matches = [hit3 ? `3 หลัก ${top}` : '', hit2 ? `2 หลัก ${bottom}` : ''].filter(Boolean).join(' + ');
-        followMessages.push(`<span class="jeeb-follow hit"><b>จปล เข้าเป้า · <mark>${matches}</mark></b><small>คำนวณจากรอบ ${tracker.start + 1} · พบในรอบติดตาม ${elapsed}/4</small></span>`);
-        hitReasons.push(`ผลเข้าเป้า จปล: ${matches}`);
+        followMessages.push(`<span class="jeeb-follow hit"><b>จปล ถูกเทคนิค · <mark>${matches}</mark></b><small>คำนวณจากรอบ ${tracker.start + 1} · พบในรอบติดตาม ${elapsed}/6</small></span>`);
+        hitReasons.push(`ถูกเทคนิค จปล: ${matches}`);
       } else {
-        const last = elapsed === 4;
-        followMessages.push(`<span class="jeeb-follow ${last ? 'expired' : ''}"><b>ติดตาม จปล จากรอบ ${tracker.start + 1}</b><small>รอบ ${elapsed}/4 · ยังไม่พบเลขที่คำนวณไว้${last ? ' · จบการติดตาม' : ''}</small></span>`);
+        const last = elapsed === 6;
+        followMessages.push(`<span class="jeeb-follow ${last ? 'expired' : ''}"><b>ติดตาม จปล จากรอบ ${tracker.start + 1}</b><small>รอบ ${elapsed}/6 · ยังไม่พบเลขที่คำนวณไว้${last ? ' · ไม่เข้าเทคนิคและจบการติดตาม' : ''}</small></span>`);
         if (last) tracker.resolved = true;
       }
     });
     trackers.filter((tracker) => !tracker.resolved).forEach((tracker) => {
       const elapsed = index - tracker.start;
-      if (elapsed < 1 || elapsed > 4) return;
+      if (elapsed < 1 || elapsed > 6) return;
       let hitLabel = '';
       let hitKind = '';
       if (tracker.type === 1) {
@@ -669,15 +682,15 @@ function analyzeDailyRounds() {
         tracker.resolved = true;
         ruleHitCount += 1;
         row.classList.add('rule-won');
-        followMessages.push(`<span class="rule-hit ${hitKind}"><b>RULE เข้าเป้า · <mark>${hitLabel}</mark></b><small>T${tracker.type} เริ่มจากรอบ ${tracker.start + 1} · พบในรอบติดตาม ${elapsed}/4</small></span>`);
-        hitReasons.push(`ผลเข้าเป้า RULE: ${hitLabel}`);
+        followMessages.push(`<span class="rule-hit ${hitKind}"><b>RULE ถูกเทคนิค · <mark>${hitLabel}</mark></b><small>T${tracker.type} เริ่มจากรอบ ${tracker.start + 1} · พบในรอบติดตาม ${elapsed}/6</small></span>`);
+        hitReasons.push(`ถูกเทคนิค RULE: ${hitLabel}`);
         ruleEvents.push({ kind: 'hit', round: index + 1, text: `T${tracker.type} จากรอบ ${tracker.start + 1} → ${hitLabel}` });
       } else {
-        const last = elapsed === 4;
-        followMessages.push(`<span class="rule-track ${last ? 'expired' : ''}">T${tracker.type} จากรอบ ${tracker.start + 1} · ${elapsed}/4 ${last ? 'ครบกำหนด' : 'ยังไม่พบ'}</span>`);
+        const last = elapsed === 6;
+        followMessages.push(`<span class="rule-track ${last ? 'expired' : ''}">T${tracker.type} จากรอบ ${tracker.start + 1} · ${elapsed}/6 ${last ? 'ครบกำหนด · ไม่เข้าเทคนิค' : 'ยังไม่พบ'}</span>`);
         if (last) {
           tracker.resolved = true;
-          ruleEvents.push({ kind: 'expired', round: index + 1, text: `T${tracker.type} จากรอบ ${tracker.start + 1} → ครบ 4 รอบ` });
+          ruleEvents.push({ kind: 'expired', round: index + 1, text: `T${tracker.type} จากรอบ ${tracker.start + 1} → ครบ 6 รอบ ไม่เข้าเทคนิค` });
         }
       }
     });
@@ -702,14 +715,14 @@ function analyzeDailyRounds() {
       trackers.push({ type: 1, start: index, resolved: false });
       ruleTriggerCount += 1;
       row.classList.add('has-rule');
-      triggerMessages.push(`<span class="rule-trigger t1"><b>T1 พี่น้อง ${top[2]}–${bottom[0]}</b><span class="rule-digit-view">${comparedDigitsHtml(top, bottom)}</span><small>4 รอบถัดไป: เบิ้ล / จปร.</small></span>`);
+      triggerMessages.push(`<span class="rule-trigger t1"><b>T1 พี่น้อง ${top[2]}–${bottom[0]}</b><span class="rule-digit-view">${comparedDigitsHtml(top, bottom)}</span><small>6 รอบถัดไป: เบิ้ล / จปร.</small></span>`);
       ruleEvents.push({ kind: 'trigger', round: index + 1, text: `T1 พี่น้อง ${top[2]}–${bottom[0]} · ตามเบิ้ล/จปร.` });
     }
     if (trigger.trick2) {
       trackers.push({ type: 2, start: index, resolved: false });
       ruleTriggerCount += 1;
       row.classList.add('has-rule');
-      triggerMessages.push(`<span class="rule-trigger t2"><b>T2 รูซ้ำ ${top[2]}–${bottom[0]}</b><span class="rule-digit-view">${comparedDigitsHtml(top, bottom)}</span><small>4 รอบถัดไป: พี่น้องบน/ล่าง</small></span>`);
+      triggerMessages.push(`<span class="rule-trigger t2"><b>T2 รูซ้ำ ${top[2]}–${bottom[0]}</b><span class="rule-digit-view">${comparedDigitsHtml(top, bottom)}</span><small>6 รอบถัดไป: พี่น้องบน/ล่าง</small></span>`);
       ruleEvents.push({ kind: 'trigger', round: index + 1, text: `T2 รูซ้ำ ${top[2]}–${bottom[0]} · ตามเลขพี่น้อง` });
     }
     ruleCell.innerHTML = triggerMessages.length ? triggerMessages.join('') : '<span class="rule-none">—</span>';
@@ -752,7 +765,7 @@ function analyzeDailyRounds() {
     const detailHtml = resultBlocks.length ? resultBlocks.join('') : '<span class="result-empty">ยังไม่พบสัญญาณในรอบนี้</span>';
     row.dataset.hitTarget = hitReasons.length ? '1' : '0';
     row.dataset.analysisDetail = encodeURIComponent(detailHtml);
-    resultCell.innerHTML = `<button class="daily-detail-button" type="button">ดูเพิ่มเติม</button><small>${hitReasons.length ? '✓ พบผลเข้าเป้า' : (resultBlocks.length ? `${resultBlocks.length} รายการวิเคราะห์` : 'ยังไม่มีสัญญาณ')}</small>`;
+    resultCell.innerHTML = `<button class="daily-detail-button" type="button">ดูเพิ่มเติม</button><small>${hitReasons.length ? '✓ ถูกเทคนิค' : (resultBlocks.length ? `${resultBlocks.length} รายการวิเคราะห์` : 'ยังไม่มีสัญญาณ')}</small>`;
   });
 
   for (let lot = 1; lot <= 66; lot += 1) {
@@ -763,7 +776,7 @@ function analyzeDailyRounds() {
     rows.forEach((row) => row.classList.add(predicted ? 'lot-predicted' : 'lot-missed'));
     const badge = document.createElement('span');
     badge.className = `lot-verdict ${predicted ? 'yes' : 'no'}`;
-    badge.textContent = predicted ? '✓ ทำนายเข้าเป้า' : '× ยังไม่เข้าเป้า';
+    badge.textContent = predicted ? '✓ ถูกเทคนิค' : '× ไม่เข้าเทคนิค';
     rows[0].querySelector('.daily-lot').appendChild(badge);
   }
   document.getElementById('hitCount').textContent = hitRounds.length;
