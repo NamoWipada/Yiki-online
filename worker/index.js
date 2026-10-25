@@ -19,6 +19,13 @@ async function verifyLineSignature(body, signature, secret) {
   return bytesToBase64(new Uint8Array(digest)) === signature;
 }
 
+function deleteAuthorizationError(request, env) {
+  if (!env.ADMIN_DELETE_KEY) return json({ ok: false, error: "delete protection is not configured" }, 503);
+  const provided = request.headers.get("x-admin-delete-key") || "";
+  if (provided !== env.ADMIN_DELETE_KEY) return json({ ok: false, error: "invalid delete key" }, 401);
+  return null;
+}
+
 // รองรับข้อความเดี่ยว เช่น "รอบ 12 506 58", "12: 506-58" และ "506 58"
 function parseResult(text) {
   const normalized = text.replace(/[,:|/\-]+/g, " ").replace(/\s+/g, " ").trim();
@@ -372,6 +379,8 @@ async function handleApi(request, env) {
   }
 
   if (url.pathname === "/api/results" && request.method === "DELETE") {
+    const authorizationError = deleteAuthorizationError(request, env);
+    if (authorizationError) return authorizationError;
     const drawDate = url.searchParams.get("date");
     const sourceId = url.searchParams.get("source_id");
     if (!/^20\d{2}-\d{2}-\d{2}$/.test(drawDate || "") || !sourceId) return json({ ok: false, error: "date and source_id are required" }, 400);
@@ -386,6 +395,36 @@ async function handleApi(request, env) {
       ).bind(drawDate, sourceId, Number(before?.total || 0), Number(before?.total || 0)),
     ]);
     return json({ ok: true, deleted_rows: Number(before?.total || 0), persisted: true });
+  }
+
+  if (url.pathname === "/api/results/delete-rows" && request.method === "POST") {
+    const authorizationError = deleteAuthorizationError(request, env);
+    if (authorizationError) return authorizationError;
+    let body;
+    try { body = await request.json(); }
+    catch { return json({ ok: false, error: "invalid json" }, 400); }
+    const drawDate = /^20\d{2}-\d{2}-\d{2}$/.test(body.draw_date || "") ? body.draw_date : null;
+    const sourceId = String(body.source_id || "").slice(0, 160);
+    const rounds = [...new Set((Array.isArray(body.rounds) ? body.rounds : [])
+      .map(Number).filter((round) => Number.isInteger(round) && round >= 1 && round <= 264))];
+    if (!drawDate || !sourceId || !rounds.length) return json({ ok: false, error: "draw_date, source_id and rounds are required" }, 400);
+    const placeholders = rounds.map(() => "?").join(",");
+    const existing = await env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM group_daily_results
+       WHERE draw_date = ? AND source_id = ? AND round_no IN (${placeholders})`
+    ).bind(drawDate, sourceId, ...rounds).first();
+    const deletedRows = Number(existing?.total || 0);
+    await env.DB.batch([
+      env.DB.prepare(
+        `DELETE FROM group_daily_results
+         WHERE draw_date = ? AND source_id = ? AND round_no IN (${placeholders})`
+      ).bind(drawDate, sourceId, ...rounds),
+      env.DB.prepare(
+        `INSERT INTO result_change_log (draw_date, source_id, action, before_rows, after_rows, changed_rows)
+         VALUES (?, ?, 'delete_rows', ?, ?, ?)`
+      ).bind(drawDate, sourceId, deletedRows, 0, deletedRows),
+    ]);
+    return json({ ok: true, deleted_rows: deletedRows, requested_rounds: rounds, persisted: true });
   }
 
   if (url.pathname === "/api/result-dates" && request.method === "GET") {

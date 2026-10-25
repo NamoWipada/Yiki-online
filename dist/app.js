@@ -62,7 +62,8 @@ function renderRealtimeRows(results = []) {
     const lotStart = (round - 1) % 4 === 0;
     const lotEnd = round % 4 === 0;
     const item = byRound.get(round);
-    return `<tr class="${item ? 'round-received' : 'round-waiting'} lot-${lot % 2 ? 'odd' : 'even'}${lotStart ? ' lot-start' : ''}${lotEnd ? ' lot-end' : ''}">
+    return `<tr class="${item ? 'round-received' : 'round-waiting'} lot-${lot % 2 ? 'odd' : 'even'}${lotStart ? ' lot-start' : ''}${lotEnd ? ' lot-end' : ''}" data-round-row="${round}">
+      <td class="round-select-cell">${realtimeEditing && item ? `<label class="round-select"><input class="round-delete-check" type="checkbox" value="${round}" aria-label="เลือกรอบ ${round} เพื่อลบ" /><span></span></label>` : ''}</td>
       <td><span class="round-no">${lotStart ? `<small>ล็อต ${String(lot).padStart(2, '0')}</small>` : ''}${String(round).padStart(3, '0')}</span></td>
       <td>${realtimeEditing ? `<input class="edit-time" data-round="${round}" value="${item?.draw_time || ''}" inputmode="numeric" placeholder="00:00" />` : (item?.draw_time || '—')}</td>
       <td class="mono realtime-number">${realtimeEditing ? `<input class="edit-top" data-round="${round}" value="${item?.top_number || ''}" inputmode="numeric" maxlength="3" placeholder="000" />` : (item?.top_number || '— — —')}</td>
@@ -382,12 +383,60 @@ function setRealtimeEditMode(enabled) {
   realtimeEditing = enabled;
   document.getElementById('editRealtime').hidden = enabled;
   document.getElementById('saveRealtime').hidden = !enabled;
+  document.getElementById('deleteSelectedRealtime').hidden = !enabled;
   document.getElementById('cancelRealtime').hidden = !enabled;
   document.getElementById('deleteRealtime').hidden = enabled;
   realtimeDateInput.disabled = enabled;
   templateDateInput.disabled = enabled;
   realtimeSourceSelect.disabled = enabled;
+  document.querySelector('.realtime-table-wrap').classList.toggle('selection-active', enabled);
   renderRealtimeRows(realtimeResults);
+  updateSelectedRounds();
+}
+
+function selectedRounds() {
+  return [...historyRows.querySelectorAll('.round-delete-check:checked')].map((input) => Number(input.value));
+}
+
+function updateSelectedRounds() {
+  const selected = selectedRounds();
+  const available = [...historyRows.querySelectorAll('.round-delete-check')];
+  const button = document.getElementById('deleteSelectedRealtime');
+  button.textContent = `ลบที่เลือก ${selected.length}`;
+  button.disabled = selected.length === 0;
+  const selectAll = document.getElementById('selectAllRounds');
+  selectAll.checked = available.length > 0 && selected.length === available.length;
+  selectAll.indeterminate = selected.length > 0 && selected.length < available.length;
+  historyRows.querySelectorAll('[data-round-row]').forEach((row) => row.classList.toggle('is-selected', Boolean(row.querySelector('.round-delete-check:checked'))));
+}
+
+async function deleteSelectedRealtimeRows() {
+  const rounds = selectedRounds();
+  const sourceId = realtimeSourceSelect.value;
+  if (!rounds.length || !sourceId) return;
+  if (!confirm(`ลบข้อมูล ${rounds.length} รอบที่เลือก (${rounds.join(', ')}) ใช่ไหม? ประวัติการลบจะถูกเก็บไว้ใน D1`)) return;
+  const deleteKey = getDeleteKey();
+  if (!deleteKey) return;
+  const response = await fetch('/api/results/delete-rows', {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-delete-key': deleteKey },
+    body: JSON.stringify({ draw_date: realtimeDateInput.value, source_id: sourceId, rounds }),
+  });
+  const result = await response.json();
+  if (!response.ok) { if (response.status === 401) sessionStorage.removeItem('yiki-delete-key'); alert(`ลบไม่สำเร็จ: ${result.error || response.status}`); return; }
+  setRealtimeEditMode(false);
+  await loadRealtimeSources({ preserve: true });
+  await loadRealtimeResults();
+  await loadDailyHistory();
+  alert(`ลบข้อมูลแล้ว ${result.deleted_rows} รอบ และบันทึกประวัติไว้ใน D1`);
+}
+
+function getDeleteKey() {
+  const saved = sessionStorage.getItem('yiki-delete-key');
+  if (saved) return saved;
+  const entered = prompt('กรอกรหัสสำหรับลบข้อมูล D1');
+  if (!entered) return '';
+  sessionStorage.setItem('yiki-delete-key', entered);
+  return entered;
 }
 
 async function saveRealtimeTable() {
@@ -421,10 +470,12 @@ async function deleteRealtimeData() {
   const sourceId = realtimeSourceSelect.value;
   if (!sourceId) { alert('ยังไม่มีกลุ่มหรือชุดข้อมูลให้ลบ'); return; }
   if (!confirm(`ลบผลทั้งหมดของวันที่ ${realtimeDateInput.value} จากตารางนี้ใช่ไหม? ประวัติการลบจะยังถูกเก็บไว้ใน D1`)) return;
+  const deleteKey = getDeleteKey();
+  if (!deleteKey) return;
   const query = new URLSearchParams({ date: realtimeDateInput.value, source_id: sourceId });
-  const response = await fetch(`/api/results?${query}`, { method: 'DELETE' });
+  const response = await fetch(`/api/results?${query}`, { method: 'DELETE', headers: { 'x-admin-delete-key': deleteKey } });
   const result = await response.json();
-  if (!response.ok) { alert(`ลบไม่สำเร็จ: ${result.error || response.status}`); return; }
+  if (!response.ok) { if (response.status === 401) sessionStorage.removeItem('yiki-delete-key'); alert(`ลบไม่สำเร็จ: ${result.error || response.status}`); return; }
   await loadRealtimeSources({ preserve: false });
   await loadRealtimeResults();
   await loadDailyHistory();
@@ -438,6 +489,12 @@ document.getElementById('refreshRealtime').addEventListener('click', async () =>
 document.getElementById('editRealtime').addEventListener('click', () => setRealtimeEditMode(true));
 document.getElementById('cancelRealtime').addEventListener('click', () => setRealtimeEditMode(false));
 document.getElementById('saveRealtime').addEventListener('click', saveRealtimeTable);
+document.getElementById('deleteSelectedRealtime').addEventListener('click', deleteSelectedRealtimeRows);
+document.getElementById('selectAllRounds').addEventListener('change', (event) => {
+  historyRows.querySelectorAll('.round-delete-check').forEach((input) => { input.checked = event.target.checked; });
+  updateSelectedRounds();
+});
+historyRows.addEventListener('change', (event) => { if (event.target.matches('.round-delete-check')) updateSelectedRounds(); });
 document.getElementById('deleteRealtime').addEventListener('click', deleteRealtimeData);
 document.getElementById('refreshAnalysis').addEventListener('click', async () => { await loadRealtimeResults(); renderAnalysisDashboard(); });
 document.querySelectorAll('[data-technique-toggle]').forEach((input) => input.addEventListener('change', () => {

@@ -1,0 +1,10 @@
+.round-select-head,.round-select-cell{display:none;width:72px;text-align:center}
+.selection-active .round-select-head,.selection-active .round-select-cell{display:table-cell}
+.round-select,.round-select-all{display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer}
+.round-select input,.round-select-all input{width:17px;height:17px;accent-color:#b84d3d;cursor:pointer}
+.round-select-all span{font-size:8px;white-space:nowrap}
+.realtime-table-wrap tr.is-selected td{background:#fff0ec!important}
+.table-action-group button.danger:disabled{cursor:not-allowed;opacity:.45}
+.table-action-group button{transition:background-color .2s ease,color .2s ease,border-color .2s ease}
+.table-action-group button:not(:disabled):hover{border-color:#7f9d79;background:#f3f7ed}
+.table-action-group button.danger:not(:disabled):hover{border-color:#b84d3d;background:#fff0ec;color:#9b352b}

@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="./enhancements.css?v=11" />
   <link rel="stylesheet" href="./realtime-template.css?v=9" />
   <link rel="stylesheet" href="./latest-prediction.css?v=1" />
+  <link rel="stylesheet" href="./selection-controls.css?v=1" />
 </head>
 <body>
   <div class="shell">
@@ -86,9 +87,9 @@
         </article>
 
         <article class="table-card realtime-card">
-          <div class="section-head"><div><p class="eyebrow">REALTIME · 264 ROUNDS</p><h2>รายละเอียดผลรายรอบ</h2></div><div class="realtime-actions"><label>เลือกวันที่ <input id="realtimeDate" type="date" /></label><label>กลุ่ม LINE <select id="realtimeSourceSelect"><option value="">ยังไม่พบกลุ่ม</option></select></label><div class="table-action-group"><button id="refreshRealtime" type="button">อัปเดต ↻</button><button id="editRealtime" type="button">แก้ไขทั้งตาราง</button><button id="saveRealtime" class="save" type="button" hidden>บันทึกลง D1</button><button id="cancelRealtime" type="button" hidden>ยกเลิก</button><button id="deleteRealtime" class="danger" type="button">ลบข้อมูล</button></div></div></div>
+          <div class="section-head"><div><p class="eyebrow">REALTIME · 264 ROUNDS</p><h2>รายละเอียดผลรายรอบ</h2></div><div class="realtime-actions"><label>เลือกวันที่ <input id="realtimeDate" type="date" /></label><label>กลุ่ม LINE <select id="realtimeSourceSelect"><option value="">ยังไม่พบกลุ่ม</option></select></label><div class="table-action-group"><button id="refreshRealtime" type="button">อัปเดต ↻</button><button id="editRealtime" type="button">แก้ไขทั้งตาราง</button><button id="saveRealtime" class="save" type="button" hidden>บันทึกลง D1</button><button id="deleteSelectedRealtime" class="danger" type="button" hidden disabled>ลบที่เลือก 0</button><button id="cancelRealtime" type="button" hidden>ยกเลิก</button><button id="deleteRealtime" class="danger" type="button">ลบข้อมูลทั้งหมด</button></div></div></div>
           <div class="sync-message" id="syncMessage"><i></i><span>กำลังโหลดข้อมูลล่าสุด</span></div>
-          <div class="table-wrap realtime-table-wrap"><table><thead><tr><th>รอบ</th><th>เวลาประกาศ</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สถานะ</th></tr></thead><tbody id="historyRows"></tbody></table></div>
+          <div class="table-wrap realtime-table-wrap"><table><thead><tr><th class="round-select-head"><label class="round-select-all"><input id="selectAllRounds" type="checkbox" /><span>เลือกทั้งหมด</span></label></th><th>รอบ</th><th>เวลาประกาศ</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สถานะ</th></tr></thead><tbody id="historyRows"></tbody></table></div>
         </article>
         <div class="disclaimer"><strong>โปรดทราบ</strong><p>เครื่องมือนี้ใช้เพื่อจัดระเบียบและวิเคราะห์ข้อมูลย้อนหลังเท่านั้น แพทเทิร์นในอดีตไม่สามารถรับประกันผลลัพธ์ในอนาคตได้</p></div>
       </section>
@@ -174,6 +175,6 @@
   </div>
   <dialog class="analysis-dialog" id="analysisDialog"><div class="dialog-head"><div><p class="eyebrow">ANALYSIS DETAIL</p><h3 id="analysisDialogTitle">รายละเอียดการวิเคราะห์</h3></div><button id="closeAnalysisDialog" type="button" aria-label="ปิด">×</button></div><div id="analysisDialogBody"></div></dialog>
   <script src="./mock-264.js?v=10"></script>
-  <script src="./app.js?v=24"></script>
+  <script src="./app.js?v=25"></script>
 </body>
 </html>
