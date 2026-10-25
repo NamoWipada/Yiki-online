@@ -414,9 +414,9 @@ async function deleteSelectedRealtimeRows() {
   const rounds = selectedRounds();
   const sourceId = realtimeSourceSelect.value;
   if (!rounds.length || !sourceId) return;
-  if (!confirm(`ลบข้อมูล ${rounds.length} รอบที่เลือก (${rounds.join(', ')}) ใช่ไหม? ประวัติการลบจะถูกเก็บไว้ใน D1`)) return;
   const deleteKey = getDeleteKey();
   if (!deleteKey) return;
+  if (!confirm(`ลบข้อมูล ${rounds.length} รอบที่เลือก (${rounds.join(', ')}) ใช่ไหม? ประวัติการลบจะถูกเก็บไว้ใน D1`)) return;
   const response = await fetch('/api/results/delete-rows', {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-delete-key': deleteKey },
     body: JSON.stringify({ draw_date: realtimeDateInput.value, source_id: sourceId, rounds }),
@@ -433,7 +433,7 @@ async function deleteSelectedRealtimeRows() {
 function getDeleteKey() {
   const saved = sessionStorage.getItem('yiki-delete-key');
   if (saved) return saved;
-  const entered = prompt('กรอกรหัสสำหรับลบข้อมูล D1');
+  const entered = prompt('กรอกรหัสลบข้อมูล D1\n(รหัสที่ตั้งไว้ใน Cloudflare Secret: ADMIN_DELETE_KEY)');
   if (!entered) return '';
   sessionStorage.setItem('yiki-delete-key', entered);
   return entered;
@@ -469,9 +469,9 @@ async function saveRealtimeTable() {
 async function deleteRealtimeData() {
   const sourceId = realtimeSourceSelect.value;
   if (!sourceId) { alert('ยังไม่มีกลุ่มหรือชุดข้อมูลให้ลบ'); return; }
-  if (!confirm(`ลบผลทั้งหมดของวันที่ ${realtimeDateInput.value} จากตารางนี้ใช่ไหม? ประวัติการลบจะยังถูกเก็บไว้ใน D1`)) return;
   const deleteKey = getDeleteKey();
   if (!deleteKey) return;
+  if (!confirm(`ลบผลทั้งหมดของวันที่ ${realtimeDateInput.value} จากตารางนี้ใช่ไหม? ประวัติการลบจะยังถูกเก็บไว้ใน D1`)) return;
   const query = new URLSearchParams({ date: realtimeDateInput.value, source_id: sourceId });
   const response = await fetch(`/api/results?${query}`, { method: 'DELETE', headers: { 'x-admin-delete-key': deleteKey } });
   const result = await response.json();
