@@ -293,6 +293,73 @@ async function handleApi(request, env) {
     return json({ ok: true, draw_date: latest, expected_rounds: 264, filled: results.length, missing: 264 - results.length, results, source, last_receipt: receipt || null, stats });
   }
 
+  if (url.pathname === "/api/results" && request.method === "PUT") {
+    let body;
+    try { body = await request.json(); }
+    catch { return json({ ok: false, error: "invalid json" }, 400); }
+    const drawDate = /^20\d{2}-\d{2}-\d{2}$/.test(body.draw_date || "") ? body.draw_date : null;
+    const sourceId = String(body.source_id || "manual:web").slice(0, 160);
+    const sourceName = String(body.source_name || "กรอกข้อมูลจากหน้าเว็บ").slice(0, 160);
+    if (!drawDate || !Array.isArray(body.rows)) return json({ ok: false, error: "draw_date and rows are required" }, 400);
+    const validRows = [];
+    const seen = new Set();
+    for (const row of body.rows) {
+      const roundNo = Number(row.round_no);
+      if (!Number.isInteger(roundNo) || roundNo < 1 || roundNo > 264 || seen.has(roundNo)) continue;
+      const top = String(row.top_number || "");
+      const bottom = String(row.bottom_number || "");
+      if (!/^\d{3}$/.test(top) || !/^\d{2}$/.test(bottom)) return json({ ok: false, error: `invalid number at round ${roundNo}` }, 400);
+      const time = /^\d{1,2}:\d{2}$/.test(row.draw_time || "") ? row.draw_time.padStart(5, "0") : null;
+      seen.add(roundNo);
+      validRows.push({ roundNo, time, top, bottom });
+    }
+    const before = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM group_daily_results WHERE draw_date = ? AND source_id = ?"
+    ).bind(drawDate, sourceId).first();
+    const eventId = `manual-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    const statements = [
+      env.DB.prepare(
+        `INSERT INTO line_sources (source_id, source_type, source_name, last_seen_at)
+         VALUES (?, 'manual', ?, datetime('now'))
+         ON CONFLICT(source_id) DO UPDATE SET source_name = excluded.source_name, last_seen_at = datetime('now'), updated_at = datetime('now')`
+      ).bind(sourceId, sourceName),
+      env.DB.prepare("DELETE FROM group_daily_results WHERE draw_date = ? AND source_id = ?").bind(drawDate, sourceId),
+      env.DB.prepare(
+        `INSERT INTO result_change_log (draw_date, source_id, action, before_rows, after_rows, changed_rows)
+         VALUES (?, ?, 'save_table', ?, ?, ?)`
+      ).bind(drawDate, sourceId, Number(before?.total || 0), validRows.length, Math.max(Number(before?.total || 0), validRows.length)),
+    ];
+    if (validRows.length) {
+      const valueSql = validRows.map(() => "(?, ?, ?, ?, ?, ?, 'แก้ไขจากหน้าเว็บ', ?, ?)").join(",");
+      const bindings = validRows.flatMap((row) => [drawDate, sourceId, row.roundNo, row.time, row.top, row.bottom, eventId, now]);
+      statements.splice(2, 0, env.DB.prepare(
+        `INSERT INTO group_daily_results
+         (draw_date, source_id, round_no, draw_time, top_number, bottom_number, source_text, event_id, occurred_at)
+         VALUES ${valueSql}`
+      ).bind(...bindings));
+    }
+    await env.DB.batch(statements);
+    return json({ ok: true, draw_date: drawDate, source_id: sourceId, saved_rows: validRows.length, persisted: true });
+  }
+
+  if (url.pathname === "/api/results" && request.method === "DELETE") {
+    const drawDate = url.searchParams.get("date");
+    const sourceId = url.searchParams.get("source_id");
+    if (!/^20\d{2}-\d{2}-\d{2}$/.test(drawDate || "") || !sourceId) return json({ ok: false, error: "date and source_id are required" }, 400);
+    const before = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM group_daily_results WHERE draw_date = ? AND source_id = ?"
+    ).bind(drawDate, sourceId).first();
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM group_daily_results WHERE draw_date = ? AND source_id = ?").bind(drawDate, sourceId),
+      env.DB.prepare(
+        `INSERT INTO result_change_log (draw_date, source_id, action, before_rows, after_rows, changed_rows)
+         VALUES (?, ?, 'delete_results', ?, 0, ?)`
+      ).bind(drawDate, sourceId, Number(before?.total || 0), Number(before?.total || 0)),
+    ]);
+    return json({ ok: true, deleted_rows: Number(before?.total || 0), persisted: true });
+  }
+
   if (url.pathname === "/api/result-dates" && request.method === "GET") {
     const { results } = await env.DB.prepare(
       `SELECT draw_date, COUNT(*) AS total_records, COUNT(DISTINCT source_id) AS source_count,

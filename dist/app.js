@@ -15,6 +15,9 @@ const historyRows = document.getElementById('historyRows');
 const dailyHistoryList = document.getElementById('dailyHistoryList');
 const roundTemplate = document.getElementById('roundTemplate');
 const EXPECTED_ROUNDS = 264;
+let realtimeEditing = false;
+let realtimeResults = [];
+let realtimePayload = null;
 
 function thailandDate() {
   const parts = new Intl.DateTimeFormat('en', {
@@ -25,16 +28,17 @@ function thailandDate() {
 }
 
 function renderRealtimeRows(results = []) {
+  realtimeResults = results;
   const byRound = new Map(results.map((item) => [Number(item.round_no), item]));
   historyRows.innerHTML = Array.from({ length: EXPECTED_ROUNDS }, (_, index) => {
     const round = index + 1;
     const item = byRound.get(round);
     return `<tr class="${item ? 'round-received' : 'round-waiting'}">
       <td><span class="round-no">${String(round).padStart(3, '0')}</span></td>
-      <td>${item?.draw_time || '—'}</td>
-      <td class="mono realtime-number">${item?.top_number || '— — —'}</td>
-      <td class="mono realtime-number">${item?.bottom_number || '— —'}</td>
-      <td>${item ? '<span class="verified">✓ รับข้อมูลแล้ว</span>' : '<span class="waiting">รอผล</span>'}</td>
+      <td>${realtimeEditing ? `<input class="edit-time" data-round="${round}" value="${item?.draw_time || ''}" inputmode="numeric" placeholder="00:00" />` : (item?.draw_time || '—')}</td>
+      <td class="mono realtime-number">${realtimeEditing ? `<input class="edit-top" data-round="${round}" value="${item?.top_number || ''}" inputmode="numeric" maxlength="3" placeholder="000" />` : (item?.top_number || '— — —')}</td>
+      <td class="mono realtime-number">${realtimeEditing ? `<input class="edit-bottom" data-round="${round}" value="${item?.bottom_number || ''}" inputmode="numeric" maxlength="2" placeholder="00" />` : (item?.bottom_number || '— —')}</td>
+      <td>${realtimeEditing ? '<span class="editing-badge">แก้ไขได้</span>' : (item ? '<span class="verified">✓ รับข้อมูลแล้ว</span>' : '<span class="waiting">รอผล</span>')}</td>
     </tr>`;
   }).join('');
   const blockRanges = [[1, 53], [54, 106], [107, 159], [160, 212], [213, 264]];
@@ -71,6 +75,7 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     const response = await fetch(`/api/results?${query}`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
+    realtimePayload = payload;
     const results = payload.results || [];
     renderRealtimeRows(results);
     renderIntakeStats(payload.stats);
@@ -149,9 +154,65 @@ async function loadDailyHistory() {
   }
 }
 
+function setRealtimeEditMode(enabled) {
+  realtimeEditing = enabled;
+  document.getElementById('editRealtime').hidden = enabled;
+  document.getElementById('saveRealtime').hidden = !enabled;
+  document.getElementById('cancelRealtime').hidden = !enabled;
+  document.getElementById('deleteRealtime').hidden = enabled;
+  realtimeDateInput.disabled = enabled;
+  realtimeSourceSelect.disabled = enabled;
+  renderRealtimeRows(realtimeResults);
+}
+
+async function saveRealtimeTable() {
+  const rows = [];
+  for (let round = 1; round <= EXPECTED_ROUNDS; round += 1) {
+    const top = historyRows.querySelector(`.edit-top[data-round="${round}"]`).value.trim();
+    const bottom = historyRows.querySelector(`.edit-bottom[data-round="${round}"]`).value.trim();
+    const time = historyRows.querySelector(`.edit-time[data-round="${round}"]`).value.trim();
+    if (!top && !bottom && !time) continue;
+    if (!/^\d{3}$/.test(top) || !/^\d{2}$/.test(bottom) || (time && !/^\d{1,2}:\d{2}$/.test(time))) {
+      alert(`กรุณาตรวจรอบ ${round}: เลขบนต้องมี 3 หลัก เลขล่าง 2 หลัก และเวลาเป็น HH:MM`);
+      return;
+    }
+    rows.push({ round_no: round, draw_time: time || null, top_number: top, bottom_number: bottom });
+  }
+  const response = await fetch('/api/results', {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ draw_date: realtimeDateInput.value, source_id: realtimeSourceSelect.value || 'manual:web', source_name: realtimePayload?.source?.source_name || 'กรอกข้อมูลจากหน้าเว็บ', rows }),
+  });
+  const result = await response.json();
+  if (!response.ok) { alert(`บันทึกไม่สำเร็จ: ${result.error || response.status}`); return; }
+  setRealtimeEditMode(false);
+  await loadRealtimeSources({ preserve: true });
+  if (!realtimeSourceSelect.value) realtimeSourceSelect.value = result.source_id;
+  await loadRealtimeResults();
+  await loadDailyHistory();
+  alert(`บันทึกลง Cloudflare D1 แล้ว ${result.saved_rows} รอบ`);
+}
+
+async function deleteRealtimeData() {
+  const sourceId = realtimeSourceSelect.value;
+  if (!sourceId) { alert('ยังไม่มีกลุ่มหรือชุดข้อมูลให้ลบ'); return; }
+  if (!confirm(`ลบผลทั้งหมดของวันที่ ${realtimeDateInput.value} จากตารางนี้ใช่ไหม? ประวัติการลบจะยังถูกเก็บไว้ใน D1`)) return;
+  const query = new URLSearchParams({ date: realtimeDateInput.value, source_id: sourceId });
+  const response = await fetch(`/api/results?${query}`, { method: 'DELETE' });
+  const result = await response.json();
+  if (!response.ok) { alert(`ลบไม่สำเร็จ: ${result.error || response.status}`); return; }
+  await loadRealtimeSources({ preserve: false });
+  await loadRealtimeResults();
+  await loadDailyHistory();
+  alert(`ลบข้อมูลแล้ว ${result.deleted_rows} รอบ และบันทึกประวัติการเปลี่ยนแปลงไว้ใน D1`);
+}
+
 realtimeDateInput.value = thailandDate();
 renderRealtimeRows();
 document.getElementById('refreshRealtime').addEventListener('click', async () => { await loadRealtimeSources(); await loadRealtimeResults(); await loadDailyHistory(); });
+document.getElementById('editRealtime').addEventListener('click', () => setRealtimeEditMode(true));
+document.getElementById('cancelRealtime').addEventListener('click', () => setRealtimeEditMode(false));
+document.getElementById('saveRealtime').addEventListener('click', saveRealtimeTable);
+document.getElementById('deleteRealtime').addEventListener('click', deleteRealtimeData);
 realtimeDateInput.addEventListener('change', async () => { await loadRealtimeSources({ preserve: false }); await loadRealtimeResults(); await loadDailyHistory(); });
 realtimeSourceSelect.addEventListener('change', () => loadRealtimeResults());
 loadRealtimeSources().then(() => loadRealtimeResults()).catch(() => loadRealtimeResults());
@@ -655,12 +716,17 @@ sidebarCollapse.addEventListener('click', () => {
   sidebarCollapse.setAttribute('aria-label', shell.classList.contains('sidebar-mini') ? 'ขยายเมนูด้านข้าง' : 'พับเมนูด้านข้าง');
 });
 
-let remaining = 30;
+const REFRESH_SECONDS = 60;
+let remaining = REFRESH_SECONDS;
 setInterval(() => {
-  remaining = remaining <= 0 ? 30 : remaining - 1;
-  if (remaining === 30) loadRealtimeSources().then(() => loadRealtimeResults({ quiet: true })).catch(() => loadRealtimeResults({ quiet: true }));
+  if (document.hidden || realtimeEditing || !document.getElementById('dashboard').classList.contains('active')) return;
+  remaining = remaining <= 0 ? REFRESH_SECONDS : remaining - 1;
+  if (remaining === REFRESH_SECONDS) loadRealtimeResults({ quiet: true });
   const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
   const seconds = String(remaining % 60).padStart(2, '0');
   document.getElementById('countdown').textContent = `${minutes}:${seconds}`;
-  document.getElementById('progressBar').style.width = `${(remaining / 30) * 100}%`;
+  document.getElementById('progressBar').style.width = `${(remaining / REFRESH_SECONDS) * 100}%`;
 }, 1000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !realtimeEditing) { remaining = REFRESH_SECONDS; loadRealtimeResults({ quiet: true }); }
+});
