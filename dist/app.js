@@ -1,6 +1,6 @@
 const navItems = document.querySelectorAll('.nav-item');
 const pages = document.querySelectorAll('.page');
-const titles = { dashboard: 'ข้อมูลเรียลไทม์', analysis: 'สรุปผลวิเคราะห์', three: 'คำนวณชุด 3 หลัก', four: 'วิเคราะห์ 264 รอบ', guide: 'คู่มือเทคนิค' };
+const titles = { dashboard: 'ข้อมูลเรียลไทม์', analysis: 'สรุปผลวิเคราะห์', statistics: 'สถิติความแม่นยำ', three: 'คำนวณชุด 3 หลัก', four: 'วิเคราะห์ 264 รอบ', guide: 'คู่มือเทคนิค' };
 function showPage(target, item) {
   navItems.forEach((nav) => nav.classList.toggle('active', nav === item));
   pages.forEach((page) => page.classList.toggle('active', page.id === target));
@@ -8,6 +8,7 @@ function showPage(target, item) {
   document.getElementById('sidebar').classList.remove('open');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (target === 'analysis') renderAnalysisDashboard();
+  if (target === 'statistics') loadTechniqueStatistics();
 }
 
 const realtimeDateInput = document.getElementById('realtimeDate');
@@ -64,7 +65,7 @@ function renderRealtimeRows(results = []) {
     const item = byRound.get(round);
     return `<tr class="${item ? 'round-received' : 'round-waiting'} lot-${lot % 2 ? 'odd' : 'even'}${lotStart ? ' lot-start' : ''}${lotEnd ? ' lot-end' : ''}" data-round-row="${round}">
       <td class="round-select-cell">${realtimeEditing && item ? `<label class="round-select"><input class="round-delete-check" type="checkbox" value="${round}" aria-label="เลือกรอบ ${round} เพื่อลบ" /><span></span></label>` : ''}</td>
-      <td><span class="round-no">${lotStart ? `<small>ล็อต ${String(lot).padStart(2, '0')}</small>` : ''}${String(round).padStart(3, '0')}</span></td>
+      <td><span class="round-identity">${lotStart ? `<small class="lot-badge">ล็อต ${String(lot).padStart(2, '0')}</small>` : ''}<b class="round-no">${String(round).padStart(3, '0')}</b></span></td>
       <td>${realtimeEditing ? `<input class="edit-time" data-round="${round}" value="${item?.draw_time || ''}" inputmode="numeric" placeholder="00:00" />` : (item?.draw_time || '—')}</td>
       <td class="mono realtime-number">${realtimeEditing ? `<input class="edit-top" data-round="${round}" value="${item?.top_number || ''}" inputmode="numeric" maxlength="3" placeholder="000" />` : (item?.top_number || '— — —')}</td>
       <td class="mono realtime-number">${realtimeEditing ? `<input class="edit-bottom" data-round="${round}" value="${item?.bottom_number || ''}" inputmode="numeric" maxlength="2" placeholder="00" />` : (item?.bottom_number || '— —')}</td>
@@ -116,20 +117,21 @@ function analysisSignalPositions(item, signals) {
   return { top, bottom };
 }
 
-function predictionsFromRound(item, roundInLot) {
+function predictionsFromRound(item, roundInLot, respectSettings = true) {
   const predictions = [];
   const top = item.top_number, bottom = item.bottom_number;
-  const groups = isTechniqueEnabled('jeeb') ? matchingGroups(top) : [];
+  const allowed = (key) => !respectSettings || isTechniqueEnabled(key);
+  const groups = allowed('jeeb') ? matchingGroups(top) : [];
   if (groups.length) {
     const rows = expandThreeToTwoRows(top);
     predictions.push({ name: 'จีบเรียง → จปล 12 คู่', tone: 'jeeb', top: [], bottom: rows.flat(), rows, groups, sourceTop: top, note: `พบ ${top} ในกลุ่ม ${groups.map((group) => group.index + 1).join(', ')} จึงแปลงเลข 3 หลักเป็นคู่ 2 หลัก 12 ตัว` });
   }
   const rule = ruleTrigger(top, bottom);
-  if (rule.trick1) predictions.push({ name: 'พี่น้อง → เบิ้ล/จปร.', tone: 'sibling', top: [], bottom: [...doubleNumbers, ...jprNumbers], note: `หน่วยบน ${top[2]} เทียบสิบล่าง ${bottom[0]}` });
-  if (rule.trick2) predictions.push({ name: 'พี่น้อง → รูซ้ำ', tone: 'same', top: [], bottom: ['01','10','12','21','23','32','34','43','45','54','56','65','67','76','78','87','89','98','90','09'], note: `พบเลขซ้ำ ${top[2]}–${bottom[0]}` });
+  if (rule.trick1 && allowed('sibling')) predictions.push({ name: 'พี่น้อง → เบิ้ล/จปร.', tone: 'sibling', top: [], bottom: [...doubleNumbers, ...jprNumbers], note: `หน่วยบน ${top[2]} เทียบสิบล่าง ${bottom[0]}` });
+  if (rule.trick2 && allowed('same')) predictions.push({ name: 'พี่น้อง → รูซ้ำ', tone: 'same', top: [], bottom: ['01','10','12','21','23','32','34','43','45','54','56','65','67','76','78','87','89','98','90','09'], note: `พบเลขซ้ำ ${top[2]}–${bottom[0]}` });
   const hunt = huntSignalPairs.find((pair) => top.includes(pair) || bottom.includes(pair));
-  if (hunt && isTechniqueEnabled('hunt')) predictions.push({ name: 'ล่าเลข 43/48/53/58', tone: 'hunt', top: [], bottom: huntTargetPairs, note: `พบสัญญาณ ${hunt}` });
-  if (roundInLot === 1 && isTechniqueEnabled('running')) {
+  if (hunt && allowed('hunt')) predictions.push({ name: 'ล่าเลข 43/48/53/58', tone: 'hunt', top: [], bottom: huntTargetPairs, note: `พบสัญญาณ ${hunt}` });
+  if (roundInLot === 1 && allowed('running')) {
     const seed = top[2] + bottom;
     predictions.push({ name: 'เลขวิ่งจากรอบแรก', tone: 'running', top: expandJeeb(seed), bottom: [], note: `ตั้งต้น ${seed}` });
   }
@@ -269,6 +271,104 @@ function renderAnalysisDashboard() {
   grid.innerHTML = `<div class="analysis-long-table"><table><thead><tr><th>ล็อต</th><th>รอบ</th><th>เวลา</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สรุปผลวิเคราะห์</th><th>รายละเอียด</th></tr></thead><tbody>${ordered.map((row) => `<tr class="${row.state.hits.length ? 'is-hit' : ''} ${row.state.signals.length ? 'has-signal' : ''} ${row.item ? '' : 'is-waiting'}"><td><span class="lot-pill">ล็อต ${String(row.lot).padStart(2, '0')}</span></td><td><b>${String(row.round).padStart(3, '0')}</b></td><td>${row.item?.draw_time || '—'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.top_number, row.topKinds) : '— — —'}</td><td class="analysis-number">${row.item ? analysisDigits(row.item.bottom_number, row.bottomKinds) : '— —'}</td><td><span class="analysis-row-summary">${row.techniqueText}</span></td><td><button class="analysis-more" type="button" data-title="ล็อต ${String(row.lot).padStart(2, '0')} · รอบ ${String(row.round).padStart(3, '0')}" data-detail="${encodeURIComponent(row.detail)}">ดูเพิ่มเติม</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
+const STAT_TECHNIQUES = [
+  { tone: 'jeeb', name: 'จีบเรียง → จปล 12 คู่' },
+  { tone: 'sibling', name: 'พี่น้อง → เบิ้ล/จปร.' },
+  { tone: 'same', name: 'พี่น้อง → รูซ้ำ' },
+  { tone: 'hunt', name: 'ล่าเลข 43/48/53/58' },
+  { tone: 'running', name: 'เลขวิ่งจากรอบแรก' },
+];
+let statisticsMode = 'day';
+
+function calculateTechniqueStatistics(rows) {
+  const stats = Object.fromEntries(STAT_TECHNIQUES.map((item) => [item.tone, { ...item, signals: 0, hits: 0, misses: 0, pending: 0, elapsed: Array(6).fill(0) }]));
+  const series = new Map();
+  rows.forEach((row) => {
+    const key = `${row.draw_date}:${row.source_id}`;
+    if (!series.has(key)) series.set(key, []);
+    series.get(key).push(row);
+  });
+  series.forEach((items) => {
+    items.sort((a, b) => Number(a.round_no) - Number(b.round_no));
+    let active = [];
+    items.forEach((item) => {
+      const round = Number(item.round_no);
+      active.forEach((prediction) => {
+        const elapsed = round - prediction.sourceRound;
+        if (prediction.done || elapsed < 1 || elapsed > 6) return;
+        const matched = matchesAnyPermutation(item.top_number, prediction.top)
+          || matchesAnyPermutation(item.top_number.slice(-2), prediction.bottom)
+          || matchesAnyPermutation(item.bottom_number, prediction.bottom);
+        if (matched) {
+          const entry = stats[prediction.tone];
+          entry.hits += 1;
+          entry.elapsed[elapsed - 1] += 1;
+          prediction.done = true;
+        } else if (elapsed === 6) {
+          stats[prediction.tone].misses += 1;
+          prediction.done = true;
+        }
+      });
+      active = active.filter((prediction) => !prediction.done);
+      const roundInLot = ((round - 1) % 4) + 1;
+      const created = predictionsFromRound(item, roundInLot, false).map((prediction) => ({ ...prediction, sourceRound: round, done: false }));
+      created.forEach((prediction) => { stats[prediction.tone].signals += 1; });
+      active.push(...created);
+    });
+    active.forEach((prediction) => { stats[prediction.tone].pending += 1; });
+  });
+  return Object.values(stats).map((item) => {
+    const completed = item.hits + item.misses;
+    const weighted = item.elapsed.reduce((sum, count, index) => sum + count * (index + 1), 0);
+    const maxCount = Math.max(...item.elapsed);
+    return {
+      ...item,
+      completed,
+      hitRate: completed ? (item.hits / completed) * 100 : 0,
+      averageRound: item.hits ? weighted / item.hits : 0,
+      commonRound: maxCount ? item.elapsed.indexOf(maxCount) + 1 : 0,
+      commonCount: maxCount,
+    };
+  });
+}
+
+function renderTechniqueStatistics(payload) {
+  const stats = calculateTechniqueStatistics(payload.rows || []);
+  const totalHits = stats.reduce((sum, item) => sum + item.hits, 0);
+  const totalCompleted = stats.reduce((sum, item) => sum + item.completed, 0);
+  const overallRate = totalCompleted ? (totalHits / totalCompleted) * 100 : 0;
+  const rangeLabel = statisticsMode === 'day' ? formatThaiDate(payload.date) : (statisticsMode === 'week' ? `7 วัน ถึง ${formatThaiDate(payload.date)}` : `${payload.row_count.toLocaleString('th-TH')} รอบล่าสุด`);
+  document.getElementById('statisticsSummary').innerHTML = `
+    <article><span>ช่วงข้อมูล</span><strong>${rangeLabel}</strong></article>
+    <article><span>ผลที่นำมาคำนวณ</span><strong>${payload.row_count.toLocaleString('th-TH')} รอบ</strong></article>
+    <article><span>ทำนายถูกทั้งหมด</span><strong>${totalHits.toLocaleString('th-TH')} ครั้ง</strong></article>
+    <article><span>อัตราถูกรวม</span><strong>${overallRate.toFixed(1)}%</strong></article>`;
+  document.getElementById('techniqueStatGrid').innerHTML = stats.map((item) => `
+    <article class="technique-stat-card ${item.tone}">
+      <header><div><small>TECHNIQUE</small><h3>${item.name}</h3></div><strong>${item.hitRate.toFixed(1)}%</strong></header>
+      <div class="technique-kpis"><div><span>ทำนายถูก</span><b>${item.hits}</b></div><div><span>สัญญาณทั้งหมด</span><b>${item.signals}</b></div><div><span>ไม่ถูกครบ 6 รอบ</span><b>${item.misses}</b></div><div><span>กำลังติดตาม</span><b>${item.pending}</b></div></div>
+      <div class="hit-round-summary"><p><span>เฉลี่ยพบผลที่</span><b>${item.averageRound ? `รอบ ${item.averageRound.toFixed(2)}` : '—'}</b></p><p><span>ถูกบ่อยที่สุด</span><b>${item.commonRound ? `รอบ ${item.commonRound} (${item.commonCount} ครั้ง)` : '—'}</b></p></div>
+      <div class="round-distribution"><div class="round-bars">${item.elapsed.map((count, index) => `<i style="--value:${item.hits ? Math.max(5, (count / Math.max(...item.elapsed, 1)) * 100) : 0}%"><b>${count}</b><span>${index + 1}/6</span></i>`).join('')}</div></div>
+    </article>`).join('');
+}
+
+async function loadTechniqueStatistics() {
+  const grid = document.getElementById('techniqueStatGrid');
+  if (!grid) return;
+  grid.innerHTML = '<p class="statistics-empty">กำลังคำนวณสถิติจาก D1</p>';
+  const date = document.getElementById('statisticsDate').value || thailandDate();
+  const limit = document.getElementById('statisticsLimit').value || '100';
+  try {
+    const query = new URLSearchParams({ mode: statisticsMode, date, limit });
+    const response = await fetch(`/api/statistics-data?${query}`, { cache: 'no-store' });
+    const payload = await readApiResponse(response);
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    renderTechniqueStatistics(payload);
+  } catch (error) {
+    grid.innerHTML = `<p class="statistics-empty error">โหลดสถิติไม่ได้ (${error.message})</p>`;
+  }
+}
+
 function openAnalysisDialog(title, html) {
   document.getElementById('analysisDialogTitle').textContent = title;
   document.getElementById('analysisDialogBody').innerHTML = html;
@@ -276,8 +376,7 @@ function openAnalysisDialog(title, html) {
 }
 
 async function loadRealtimeResults({ quiet = false } = {}) {
-  const date = thailandDate();
-  realtimeDateInput.value = date;
+  const date = realtimeDateInput.value || thailandDate();
   templateDateInput.value = date;
   const sourceId = realtimeSourceSelect.value;
   const message = document.getElementById('syncMessage');
@@ -301,12 +400,11 @@ async function loadRealtimeResults({ quiet = false } = {}) {
     document.getElementById('realtimeDateLabel').textContent = payload.draw_date || date;
     templateDateInput.value = date;
     document.getElementById('templateCurrentDate').textContent = formatThaiDate(date);
-    document.getElementById('realtimeCurrentDate').textContent = formatThaiDate(date);
     const lineDateStatus = document.getElementById('lineDateStatus');
     if (payload.active_line_date) {
       lineDateStatus.textContent = payload.active_line_date === date
-        ? `เว็บไซต์กำลังแสดงวันนี้ · LINE กำลังบันทึกผลเข้าวันที่ ${formatThaiDate(payload.active_line_date)}`
-        : `เว็บไซต์แสดงวันนี้ ${formatThaiDate(date)} · LINE ตั้งรับผลไว้ที่ ${formatThaiDate(payload.active_line_date)}`;
+        ? `กำลังดู ${formatThaiDate(date)} · LINE กำลังบันทึกผลเข้าวันเดียวกัน`
+        : `กำลังดู ${formatThaiDate(date)} · LINE ตั้งรับผลไว้ที่ ${formatThaiDate(payload.active_line_date)}`;
     } else {
       lineDateStatus.textContent = `เว็บไซต์แสดงผลของวันปัจจุบัน · เปลี่ยนวันที่รับข้อมูลผ่าน LINE เช่น 10/10/2026`;
     }
@@ -330,8 +428,7 @@ async function loadRealtimeResults({ quiet = false } = {}) {
 }
 
 async function loadRealtimeSources({ preserve = true } = {}) {
-  const date = thailandDate();
-  realtimeDateInput.value = date;
+  const date = realtimeDateInput.value || thailandDate();
   templateDateInput.value = date;
   const previous = preserve ? realtimeSourceSelect.value : '';
   const response = await fetch(`/api/sources?date=${encodeURIComponent(date)}`, { cache: 'no-store' });
@@ -370,8 +467,14 @@ async function loadDailyHistory() {
       button.type = 'button';
       button.className = `history-day${item.draw_date === realtimeDateInput.value ? ' active' : ''}`;
       button.innerHTML = `<span>${formatThaiDate(item.draw_date)}</span><strong>${item.total_records} รายการ</strong><small>${item.source_count} กลุ่ม · รอบล่าสุด ${String(item.latest_round || 0).padStart(3, '0')}</small>`;
-      button.disabled = true;
-      button.title = 'ข้อมูลย้อนหลังเก็บไว้ใน D1 หน้าข้อมูลเรียลไทม์แสดงเฉพาะวันปัจจุบัน';
+      button.addEventListener('click', async () => {
+        realtimeDateInput.value = item.draw_date;
+        templateDateInput.value = item.draw_date;
+        await loadRealtimeSources({ preserve: false });
+        await loadRealtimeResults();
+        await loadDailyHistory();
+        document.querySelector('.realtime-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
       dailyHistoryList.appendChild(button);
     });
   } catch (error) {
@@ -488,7 +591,6 @@ async function deleteRealtimeData() {
 realtimeDateInput.value = thailandDate();
 templateDateInput.value = realtimeDateInput.value;
 document.getElementById('templateCurrentDate').textContent = formatThaiDate(realtimeDateInput.value);
-document.getElementById('realtimeCurrentDate').textContent = formatThaiDate(realtimeDateInput.value);
 renderRealtimeRows();
 document.getElementById('refreshRealtime').addEventListener('click', async () => { await loadRealtimeSources(); await loadRealtimeResults(); await loadDailyHistory(); });
 document.getElementById('editRealtime').addEventListener('click', () => setRealtimeEditMode(true));
@@ -502,6 +604,17 @@ document.getElementById('selectAllRounds').addEventListener('change', (event) =>
 historyRows.addEventListener('change', (event) => { if (event.target.matches('.round-delete-check')) updateSelectedRounds(); });
 document.getElementById('deleteRealtime').addEventListener('click', deleteRealtimeData);
 document.getElementById('refreshAnalysis').addEventListener('click', async () => { await loadRealtimeResults(); renderAnalysisDashboard(); });
+document.getElementById('statisticsDate').value = thailandDate();
+document.getElementById('refreshStatistics').addEventListener('click', loadTechniqueStatistics);
+document.getElementById('statisticsDate').addEventListener('change', loadTechniqueStatistics);
+document.getElementById('statisticsLimit').addEventListener('change', loadTechniqueStatistics);
+document.querySelectorAll('[data-stat-mode]').forEach((button) => button.addEventListener('click', () => {
+  statisticsMode = button.dataset.statMode;
+  document.querySelectorAll('[data-stat-mode]').forEach((item) => item.classList.toggle('active', item === button));
+  document.getElementById('statisticsDateWrap').hidden = statisticsMode === 'rounds';
+  document.getElementById('statisticsLimitWrap').hidden = statisticsMode !== 'rounds';
+  loadTechniqueStatistics();
+}));
 document.querySelectorAll('[data-technique-toggle]').forEach((input) => input.addEventListener('change', () => {
   applyTechniqueSettings({ ...enabledTechniques, [input.dataset.techniqueToggle]: input.checked });
 }));
@@ -515,6 +628,12 @@ document.getElementById('analysisLotGrid').addEventListener('click', (event) => 
 document.getElementById('closeAnalysisDialog').addEventListener('click', () => document.getElementById('analysisDialog').close());
 document.getElementById('analysisDialog').addEventListener('click', (event) => { if (event.target.id === 'analysisDialog') event.target.close(); });
 realtimeSourceSelect.addEventListener('change', () => loadRealtimeResults());
+realtimeDateInput.addEventListener('change', async () => {
+  templateDateInput.value = realtimeDateInput.value;
+  await loadRealtimeSources({ preserve: false });
+  await loadRealtimeResults();
+  await loadDailyHistory();
+});
 loadRealtimeSources().then(() => loadRealtimeResults()).catch(() => loadRealtimeResults());
 loadDailyHistory();
 

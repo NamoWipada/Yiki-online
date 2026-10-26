@@ -436,6 +436,31 @@ async function handleApi(request, env) {
     return json({ ok: true, dates: results });
   }
 
+  if (url.pathname === "/api/statistics-data" && request.method === "GET") {
+    const mode = ["day", "week", "rounds"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "day";
+    const requestedDate = /^20\d{2}-\d{2}-\d{2}$/.test(url.searchParams.get("date") || "") ? url.searchParams.get("date") : bangkokDate(Date.now());
+    const requestedLimit = Number(url.searchParams.get("limit") || 100);
+    const limit = Math.min(Math.max(Number.isInteger(requestedLimit) ? requestedLimit : 100, 1), 5000);
+    let query, bindings;
+    if (mode === "day") {
+      query = `SELECT draw_date, source_id, round_no, draw_time, top_number, bottom_number FROM group_daily_results
+        WHERE draw_date = ? ORDER BY draw_date ASC, source_id ASC, round_no ASC`;
+      bindings = [requestedDate];
+    } else if (mode === "week") {
+      query = `SELECT draw_date, source_id, round_no, draw_time, top_number, bottom_number FROM group_daily_results
+        WHERE draw_date BETWEEN date(?, '-6 day') AND ? ORDER BY draw_date ASC, source_id ASC, round_no ASC`;
+      bindings = [requestedDate, requestedDate];
+    } else {
+      query = `SELECT draw_date, source_id, round_no, draw_time, top_number, bottom_number FROM (
+        SELECT draw_date, source_id, round_no, draw_time, top_number, bottom_number FROM group_daily_results
+        ORDER BY draw_date DESC, updated_at DESC, round_no DESC LIMIT ?
+      ) ORDER BY draw_date ASC, source_id ASC, round_no ASC`;
+      bindings = [limit];
+    }
+    const { results } = await env.DB.prepare(query).bind(...bindings).all();
+    return json({ ok: true, mode, date: requestedDate, limit, row_count: results.length, rows: results });
+  }
+
   return json({ ok: false, error: "not found" }, 404);
 }
 

@@ -11,9 +11,10 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles.css?v=10" />
   <link rel="stylesheet" href="./enhancements.css?v=11" />
-  <link rel="stylesheet" href="./realtime-template.css?v=9" />
+  <link rel="stylesheet" href="./realtime-template.css?v=10" />
   <link rel="stylesheet" href="./latest-prediction.css?v=1" />
   <link rel="stylesheet" href="./selection-controls.css?v=1" />
+  <link rel="stylesheet" href="./statistics-dashboard.css?v=1" />
 </head>
 <body>
   <div class="shell">
@@ -26,6 +27,7 @@
       <nav aria-label="เมนูหลัก">
         <button class="nav-item active" data-page="dashboard" onclick="showPage('dashboard',this)"><span class="nav-icon">⌁</span><span>ข้อมูลเรียลไทม์</span><i></i></button>
         <button class="nav-item" data-page="analysis" onclick="showPage('analysis',this)"><span class="nav-icon">◎</span><span>สรุปผลวิเคราะห์</span><i></i></button>
+        <button class="nav-item" data-page="statistics" onclick="showPage('statistics',this)"><span class="nav-icon">Σ</span><span>สถิติความแม่นยำ</span><i></i></button>
         <button class="nav-item" data-page="three" onclick="showPage('three',this)"><span class="nav-icon">03</span><span>คำนวณชุด 3 หลัก</span><i></i></button>
         <button class="nav-item" data-page="four" onclick="showPage('four',this)"><span class="nav-icon">264</span><span>วิเคราะห์ 264 รอบ</span><i></i></button>
         <button class="nav-item" data-page="guide" onclick="showPage('guide',this)"><span class="nav-icon">?</span><span>คู่มือเทคนิค</span><i></i></button>
@@ -75,7 +77,7 @@
 
         <article class="round-template-card">
           <div class="section-head"><div><p class="eyebrow">DAILY TEMPLATE · 264 ROUNDS</p><h2>ตารางรับผลจาก LINE</h2><p>รอบใหม่จะเติมลงช่องอัตโนมัติ ส่วนรอบที่ยังไม่มาจะแสดงเป็นช่องว่าง</p></div><span class="template-total"><i id="templateFilled">0</i> / 264 รอบ</span></div>
-          <section class="line-date-control"><div><label>วันที่ที่แสดงบนเว็บไซต์</label><strong id="templateCurrentDate">—</strong><input id="templateDate" type="hidden" /><small id="lineDateStatus">เว็บไซต์แสดงผลของวันปัจจุบัน การเปลี่ยนวันที่รับข้อมูลทำผ่าน LINE เท่านั้น</small></div><aside><b>เปลี่ยนวันที่รับข้อมูลผ่าน LINE</b><code>10/10/2026</code><span>เมื่อบอทพบข้อความวันที่ตามแพตเทิร์นนี้ จะนำผลข้อความถัดไปเก็บในวันนั้นจนกว่าจะส่งวันที่ใหม่</span></aside></section>
+          <section class="line-date-control"><div><label>วันที่ที่กำลังเปิดดู</label><strong id="templateCurrentDate">—</strong><input id="templateDate" type="hidden" /><small id="lineDateStatus">การเลือกวันที่บนเว็บใช้สำหรับดูข้อมูลเท่านั้น วันที่รับข้อมูลเปลี่ยนผ่าน LINE</small></div><aside><b>เปลี่ยนวันที่รับข้อมูลผ่าน LINE</b><code>10/10/2026</code><span>เมื่อบอทพบข้อความวันที่ตามแพตเทิร์นนี้ จะนำผลข้อความถัดไปเก็บในวันนั้นจนกว่าจะส่งวันที่ใหม่</span></aside></section>
           <div class="line-intake-stats">
             <div><span>ข้อความวันนี้</span><strong id="statMessages">0</strong></div>
             <div><span>ข้อความที่มีผล</span><strong id="statAccepted">0</strong></div>
@@ -87,7 +89,7 @@
         </article>
 
         <article class="table-card realtime-card">
-          <div class="section-head"><div><p class="eyebrow">REALTIME · 264 ROUNDS</p><h2>รายละเอียดผลรายรอบ</h2></div><div class="realtime-actions"><input id="realtimeDate" type="hidden" /><label>วันที่ปัจจุบัน <strong id="realtimeCurrentDate">—</strong></label><label>กลุ่ม LINE <select id="realtimeSourceSelect"><option value="">ยังไม่พบกลุ่ม</option></select></label><div class="table-action-group"><button id="refreshRealtime" type="button">อัปเดต ↻</button><button id="editRealtime" type="button">แก้ไขทั้งตาราง</button><button id="saveRealtime" class="save" type="button" hidden>บันทึกลง D1</button><button id="deleteSelectedRealtime" class="danger" type="button" hidden disabled>ลบที่เลือก 0</button><button id="cancelRealtime" type="button" hidden>ยกเลิก</button><button id="deleteRealtime" class="danger" type="button">ลบข้อมูลทั้งหมด</button></div></div></div>
+          <div class="section-head"><div><p class="eyebrow">REALTIME · 264 ROUNDS</p><h2>รายละเอียดผลรายรอบ</h2></div><div class="realtime-actions"><label>วันที่ดูข้อมูล <input id="realtimeDate" type="date" /></label><span id="realtimeCurrentDate" hidden></span><label>กลุ่ม LINE <select id="realtimeSourceSelect"><option value="">ยังไม่พบกลุ่ม</option></select></label><div class="table-action-group"><button id="refreshRealtime" type="button">อัปเดต ↻</button><button id="editRealtime" type="button">แก้ไขทั้งตาราง</button><button id="saveRealtime" class="save" type="button" hidden>บันทึกลง D1</button><button id="deleteSelectedRealtime" class="danger" type="button" hidden disabled>ลบที่เลือก 0</button><button id="cancelRealtime" type="button" hidden>ยกเลิก</button><button id="deleteRealtime" class="danger" type="button">ลบข้อมูลทั้งหมด</button></div></div></div>
           <div class="sync-message" id="syncMessage"><i></i><span>กำลังโหลดข้อมูลล่าสุด</span></div>
           <div class="table-wrap realtime-table-wrap"><table><thead><tr><th class="round-select-head"><label class="round-select-all"><input id="selectAllRounds" type="checkbox" /><span>เลือกทั้งหมด</span></label></th><th>รอบ</th><th>เวลาประกาศ</th><th>3 ตัวบน</th><th>2 ตัวล่าง</th><th>สถานะ</th></tr></thead><tbody id="historyRows"></tbody></table></div>
         </article>
@@ -111,6 +113,17 @@
         </details>
         <div class="analysis-legend"><span><i class="signal"></i> สีสัญญาณ: ตำแหน่งที่เข้าเทคนิค</span><span><i class="success"></i> สีผลลัพธ์: เลขที่ทำนายถูก (สลับตำแหน่งได้)</span><span><i class="dual"></i> ส้ม–เขียว: เป็นทั้งสัญญาณและผลลัพธ์</span></div>
         <section class="analysis-lot-grid analysis-table-shell" id="analysisLotGrid"><p class="analysis-empty">กำลังรอข้อมูลจากหน้าเรียลไทม์</p></section>
+      </section>
+
+      <section class="page" id="statistics">
+        <div class="statistics-hero"><div><p class="eyebrow">TECHNIQUE PERFORMANCE</p><h2>สถิติความแม่นยำรายเทคนิค</h2><p>สรุปจำนวนคำทำนายที่ถูก อัตราถูก และรอบติดตามที่พบผลบ่อยที่สุด โดยยึดเพดานติดตามไม่เกิน 6 รอบ</p></div><button id="refreshStatistics" type="button">คำนวณใหม่ ↻</button></div>
+        <section class="statistics-filters" aria-label="ตัวกรองสถิติ">
+          <div class="period-tabs"><button class="active" type="button" data-stat-mode="day">รายวัน</button><button type="button" data-stat-mode="week">7 วัน</button><button type="button" data-stat-mode="rounds">ตามจำนวนรอบ</button></div>
+          <label id="statisticsDateWrap">วันที่สิ้นสุด <input id="statisticsDate" type="date" /></label>
+          <label id="statisticsLimitWrap" hidden>จำนวนผลล่าสุด <select id="statisticsLimit"><option value="100">100 รอบ</option><option value="500">500 รอบ</option><option value="1000">1,000 รอบ</option><option value="2000">2,000 รอบ</option></select></label>
+        </section>
+        <div class="statistics-summary" id="statisticsSummary"><article><span>กำลังโหลดข้อมูล</span><strong>—</strong></article></div>
+        <section class="technique-stat-grid" id="techniqueStatGrid"><p class="statistics-empty">กำลังคำนวณสถิติ</p></section>
       </section>
 
       <section class="page" id="three">
@@ -175,6 +188,6 @@
   </div>
   <dialog class="analysis-dialog" id="analysisDialog"><div class="dialog-head"><div><p class="eyebrow">ANALYSIS DETAIL</p><h3 id="analysisDialogTitle">รายละเอียดการวิเคราะห์</h3></div><button id="closeAnalysisDialog" type="button" aria-label="ปิด">×</button></div><div id="analysisDialogBody"></div></dialog>
   <script src="./mock-264.js?v=10"></script>
-  <script src="./app.js?v=26"></script>
+  <script src="./app.js?v=28"></script>
 </body>
 </html>
